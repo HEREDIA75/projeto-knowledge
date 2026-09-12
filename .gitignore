@@ -1,0 +1,23 @@
+# Ambientes Virtuais
+venv/
+env/
+.venv/
+
+# Arquivos Python compilados
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Variáveis de Ambiente (NUNCA SUBIR)
+.env
+
+# Banco de Dados Local
+*.sqlite3
+*.db
+
+# Arquivos de IDEs
+.vscode/
+.idea/
+
+# Coleta de Arquivos Estáticos do Django
+staticfiles/
