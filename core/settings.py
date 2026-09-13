@@ -16,9 +16,16 @@ SECRET_KEY = config(
     "SECRET_KEY", default="django-insecure-chave-temporaria-desenvolvimento-123"
 )
 DEBUG = config("DEBUG", default=True, cast=bool)
+
+# Inclui .onrender.com por padrão para garantir o funcionamento em produção
 ALLOWED_HOSTS = config(
-    "'127.0.0.1', 'localhost', '.web.app', '.firebaseapp.com', '.onrender.com'",
+    "ALLOWED_HOSTS",
+    default="127.0.0.1,localhost,.web.app,.firebaseapp.com,.onrender.com",
+    cast=Csv(),
 )
+
+# Trata cabeçalhos de proxy do Render (resolve problemas de HTTPS e CSRF)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # -----------------------------------------------------------------------------
 # Aplicações
@@ -96,15 +103,10 @@ USE_TZ = True
 # -----------------------------------------------------------------------------
 # Configuração de Storages (Estáticos e Mídia)
 # -----------------------------------------------------------------------------
-USE_GCP_STORAGE = config("USE_GCP_STORAGE", default=not DEBUG, cast=bool)
-
-# Estáticos Padrão
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-# Mídia Padrão (Local)
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
@@ -113,11 +115,13 @@ STORAGES = {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
 
-# Se ativado via .env ou em Produção (DEBUG=False)
+# Integração com Google Cloud Storage / Firebase Storage
+USE_GCP_STORAGE = config("USE_GCP_STORAGE", default=not DEBUG, cast=bool)
+
 if USE_GCP_STORAGE:
     GS_BUCKET_NAME = config(
         "GS_BUCKET_NAME", default="meu-app-django-bc95f.appspot.com"
@@ -143,7 +147,7 @@ if USE_GCP_STORAGE:
     MEDIA_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/media/"
 
 # -----------------------------------------------------------------------------
-# CORS & Outras Configurações
+# CORS & E-mail
 # -----------------------------------------------------------------------------
 CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=DEBUG, cast=bool)
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
