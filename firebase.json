@@ -1,10 +1,36 @@
 {
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "python310",
+      "ignore": [
+        "venv",
+        ".git",
+        "firebase-debug.log",
+        "*.pyc",
+        "__pycache__"
+      ]
+    }
+  ],
   "hosting": {
-    "public": "staticfiles",
+    "public": "public",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "function": "app"
+      }
     ]
+  },
+  "emulators": {
+    "functions": { "port": 5001 },
+    "hosting": { "host": "127.0.0.1", "port": 5005 },
+    "ui": { "enabled": true, "host": "127.0.0.1", "port": 4005 },
+    "singleProjectMode": true
   }
 }

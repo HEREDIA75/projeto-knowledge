@@ -7,17 +7,22 @@ from pathlib import Path
 from decouple import config, Csv
 import dj_database_url
 
-# Caminho base do projeto
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Configurações de Segurança lidas via .env
+# -----------------------------------------------------------------------------
+# Segurança e Ambiente
+# -----------------------------------------------------------------------------
 SECRET_KEY = config(
     "SECRET_KEY", default="django-insecure-chave-temporaria-desenvolvimento-123"
 )
 DEBUG = config("DEBUG", default=True, cast=bool)
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="127.0.0.1,localhost", cast=Csv())
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS", default="127.0.0.1,localhost,.web.app,.firebaseapp.com", cast=Csv()
+)
 
-# Definição de Aplicações
+# -----------------------------------------------------------------------------
+# Aplicações
+# -----------------------------------------------------------------------------
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -25,15 +30,14 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # Bibliotecas de Terceiros
     "corsheaders",
-    # Aplicações do Projeto Knowledge
+    "storages",
     "modules",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "corsheaders.middleware.CorsMiddleware",  # Suporte a requisições CORS (Frontend/Firebase)
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -62,14 +66,18 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 
-# Configuração Flexível do Banco de Dados (SQLite por padrão, PostgreSQL via URL no .env)
+# -----------------------------------------------------------------------------
+# Banco de Dados
+# -----------------------------------------------------------------------------
 DATABASES = {
     "default": dj_database_url.config(
         default=config("DATABASE_URL", default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
     )
 }
 
-# Validação de Senhas
+# -----------------------------------------------------------------------------
+# Validação de Senhas & Internacionalização
+# -----------------------------------------------------------------------------
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
@@ -79,27 +87,64 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# Internacionalização (pt-br e Horário de Brasília)
 LANGUAGE_CODE = "pt-br"
 TIME_ZONE = "America/Sao_Paulo"
 USE_I18N = True
 USE_TZ = True
 
-# Arquivos Estáticos e Mídia
+# -----------------------------------------------------------------------------
+# Configuração de Storages (Estáticos e Mídia)
+# -----------------------------------------------------------------------------
+USE_GCP_STORAGE = config("USE_GCP_STORAGE", default=not DEBUG, cast=bool)
+
+# Estáticos Padrão
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
 
+# Mídia Padrão (Local)
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# Configurações de CORS (Permitir acesso do Frontend/Firebase)
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
+
+# Se ativado via .env ou em Produção (DEBUG=False)
+if USE_GCP_STORAGE:
+    GS_BUCKET_NAME = config(
+        "GS_BUCKET_NAME", default="meu-app-django-bc95f.appspot.com"
+    )
+    GS_CREDENTIALS_FILE = BASE_DIR / "credentials" / "firebase-key.json"
+
+    options = {
+        "bucket_name": GS_BUCKET_NAME,
+        "location": "media",
+    }
+
+    if GS_CREDENTIALS_FILE.exists():
+        from google.oauth2 import service_account
+
+        options["credentials"] = service_account.Credentials.from_service_account_file(
+            GS_CREDENTIALS_FILE
+        )
+
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+        "OPTIONS": options,
+    }
+    MEDIA_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/media/"
+
+# -----------------------------------------------------------------------------
+# CORS & Outras Configurações
+# -----------------------------------------------------------------------------
 CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=DEBUG, cast=bool)
-
-# Chave primária padrão
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-# Email
 EMAIL_BACKEND = config(
     "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
 )

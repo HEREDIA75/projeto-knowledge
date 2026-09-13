@@ -1,23 +1,29 @@
-# Ambientes Virtuais
+# Python & Ambientes Virtuais
+*.pyc
+__pycache__/
+*.pyo
 venv/
 env/
-.venv/
 
-# Arquivos Python compilados
-__pycache__/
-*.py[cod]
-*$py.class
+# Firebase & Logs
+.firebase/
+firebase-debug.log
+ui-debug.log
 
-# Variáveis de Ambiente (NUNCA SUBIR)
+# Credenciais e Arquivos Sensíveis
+*.json
+!firebase.json
+!skills-lock.json
+credentials/
 .env
 
-# Banco de Dados Local
+# Banco de dados local
 *.sqlite3
-*.db
 
-# Arquivos de IDEs
-.vscode/
-.idea/
-
-# Coleta de Arquivos Estáticos do Django
-staticfiles/
+# Arquivos estáticos coletados
+staticfiles/*credentials*.json
+*.json
+*credentials*.json
+*.json
+!firebase.json
+!skills-lock.json
