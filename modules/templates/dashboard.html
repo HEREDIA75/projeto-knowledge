@@ -9,6 +9,23 @@
 <body class="bg-dark text-light">
     <div class="container py-5">
         <h1 class="mb-4">Trilhas de Conhecimento</h1>
+        
+        <!-- ================= IFRAME DO JOGO AQUI ================= -->
+        <div class="row mb-5">
+            <div class="col-12 text-center">
+                <div class="card bg-secondary p-3 d-inline-block shadow">
+                    <h4 class="mb-3 text-white">Arcade Mini-Game</h4>
+                    <iframe 
+                        src="/jogos/neon-tetris/index.html" 
+                        width="320" 
+                        height="450" 
+                        style="border: 2px solid #00ffff; border-radius: 8px; background: #000;">
+                    </iframe>
+                </div>
+            </div>
+        </div>
+        <!-- ======================================================== -->
+
         <div class="row">
             {% for course in courses %}
             <div class="col-md-4 mb-4">

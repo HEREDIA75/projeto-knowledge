@@ -27,3 +27,7 @@ staticfiles/*credentials*.json
 *.json
 !firebase.json
 !skills-lock.json
+
+# Credenciais do Firebase
+firebase-credentials.json
+*.jsonfirebase-credentials.json

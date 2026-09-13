@@ -59,7 +59,9 @@ ROOT_URLCONF = "core.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [
+            BASE_DIR / "templates"
+        ],  # <-- IMPORTANTE: Aponta para a pasta templates na raiz
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -103,9 +105,9 @@ USE_TZ = True
 # -----------------------------------------------------------------------------
 # Configuração de Storages (Estáticos e Mídia)
 # -----------------------------------------------------------------------------
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
+STATICFILES_DIRS = [BASE_DIR / "public"] if (BASE_DIR / "static").exists() else []
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"

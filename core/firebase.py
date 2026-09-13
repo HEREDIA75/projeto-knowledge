@@ -1,24 +1,74 @@
+import json
+import logging
 import os
+from pathlib import Path
+
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# Inicializa o app Firebase apenas se ainda não estiver inicializado
-if not firebase_admin._apps:
-    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+logger = logging.getLogger(__name__)
 
-    if cred_path and os.path.exists(cred_path):
-        cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred)
-    else:
+# Caminho para a raiz do projeto (projeto-knowledge/)
+BASE_DIR = Path(__file__).resolve().parent.parent
+CREDENTIALS_PATH = BASE_DIR / "firebase-credentials.json"
+
+
+def initialize_firebase():
+    """Inicializa o SDK do Firebase Admin.
+
+    Ordem de prioridade:
+    1. Variável de ambiente FIREBASE_CREDENTIALS_JSON (Render / Produção)
+    2. Arquivo JSON na raiz (Ambiente Local)
+    3. Application Default Credentials (ADC)
+    """
+    if firebase_admin._apps:
+        return
+
+    # 1. Tenta carregar do Render / Produção via variável de ambiente contendo o JSON string
+    creds_json = os.environ.get("FIREBASE_CREDENTIALS_JSON")
+    if creds_json:
         try:
-            # Tenta inicialização padrão (GCP ADC)
-            firebase_admin.initialize_app()
+            cred_dict = json.loads(creds_json)
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred)
+            print(
+                "✓ Firebase inicializado via variável de ambiente (FIREBASE_CREDENTIALS_JSON)"
+            )
+            return
         except Exception as e:
-            print(f"Aviso: Firebase não pôde ser inicializado automaticamente: {e}")
+            print(f"⚠️ Erro ao processar FIREBASE_CREDENTIALS_JSON: {e}")
 
-# Tenta capturar o cliente do Firestore com segurança
-try:
-    db = firestore.client() if firebase_admin._apps else None
-except Exception as e:
-    print(f"Aviso: Firestore não conectado: {e}")
-    db = None
+    # 2. Tenta carregar do arquivo JSON local (Desenvolvimento)
+    if CREDENTIALS_PATH.exists():
+        try:
+            cred = credentials.Certificate(str(CREDENTIALS_PATH))
+            firebase_admin.initialize_app(cred)
+            print(f"✓ Firebase inicializado via arquivo local: {CREDENTIALS_PATH.name}")
+            return
+        except Exception as e:
+            print(f"⚠️ Erro ao ler arquivo de credenciais ({CREDENTIALS_PATH}): {e}")
+
+    # 3. Fallback para ADC / Variável GOOGLE_APPLICATION_CREDENTIALS
+    try:
+        firebase_admin.initialize_app()
+        print("✓ Firebase inicializado via ADC / Variável de Ambiente")
+    except Exception as e:
+        print(f"⚠️ Não foi possível inicializar o Firebase: {e}")
+
+
+def get_firestore_client():
+    """Retorna o cliente do Firestore ou None caso haja falha."""
+    initialize_firebase()
+
+    if not firebase_admin._apps:
+        return None
+
+    try:
+        return firestore.client()
+    except Exception as e:
+        print(f"⚠️ Erro ao conectar ao cliente do Firestore: {e}")
+        return None
+
+
+# Instância global exportada para o projeto
+db = get_firestore_client()

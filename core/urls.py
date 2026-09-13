@@ -15,12 +15,19 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import include, path
+
+# Importe 'api' apontando para o seu diretório modules:
 from modules.api import api
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/", api.urls),
-    path("", include("modules.urls")),  # Frontend web
+    path("api/", api.urls),  # Instância do Django Ninja
+    path("", include("modules.urls")),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static("/", document_root=settings.BASE_DIR / "public")

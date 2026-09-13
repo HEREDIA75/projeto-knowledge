@@ -1,18 +1,4 @@
 {
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "runtime": "python310",
-      "ignore": [
-        "venv",
-        ".git",
-        "firebase-debug.log",
-        "*.pyc",
-        "__pycache__"
-      ]
-    }
-  ],
   "hosting": {
     "public": "public",
     "ignore": [
@@ -20,7 +6,17 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "cleanUrls": true,
+    "trailingSlash": false,
     "rewrites": [
+      {
+        "source": "/jogos/**",
+        "destination": "/jogos/**"
+      },
+      {
+        "source": "/static/**",
+        "destination": "/static/**"
+      },
       {
         "source": "**",
         "function": "app"
@@ -28,9 +24,15 @@
     ]
   },
   "emulators": {
-    "functions": { "port": 5001 },
-    "hosting": { "host": "127.0.0.1", "port": 5005 },
-    "ui": { "enabled": true, "host": "127.0.0.1", "port": 4005 },
+    "hosting": {
+      "host": "127.0.0.1",
+      "port": 5005
+    },
+    "ui": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 4005
+    },
     "singleProjectMode": true
   }
 }
