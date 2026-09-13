@@ -1,17 +1,24 @@
 import os
 import firebase_admin
-from firebase_admin import credentials, auth, firestore
-from django.conf import settings
+from firebase_admin import credentials, firestore
 
-# Caminho para as credenciais baixadas
-cred_path = os.path.join(settings.BASE_DIR, "firebase-credentials.json")
-
+# Inicializa o app Firebase apenas se ainda não estiver inicializado
 if not firebase_admin._apps:
-    if os.path.exists(cred_path):
+    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
+    if cred_path and os.path.exists(cred_path):
         cred = credentials.Certificate(cred_path)
         firebase_admin.initialize_app(cred)
     else:
-        # Fallback para ambiente de producao usando variaveis de ambiente
-        firebase_admin.initialize_app()
+        try:
+            # Tenta inicialização padrão (GCP ADC)
+            firebase_admin.initialize_app()
+        except Exception as e:
+            print(f"Aviso: Firebase não pôde ser inicializado automaticamente: {e}")
 
-db = firestore.client() if firebase_admin._apps else None
+# Tenta capturar o cliente do Firestore com segurança
+try:
+    db = firestore.client() if firebase_admin._apps else None
+except Exception as e:
+    print(f"Aviso: Firestore não conectado: {e}")
+    db = None
