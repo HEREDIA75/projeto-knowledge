@@ -149,7 +149,26 @@ if USE_GCP_STORAGE:
 # -----------------------------------------------------------------------------
 # CORS & E-mail
 # -----------------------------------------------------------------------------
-CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=DEBUG, cast=bool)
+# -----------------------------------------------------------------------------
+# CORS & CSRF Settings
+# -----------------------------------------------------------------------------
+# Origens específicas permitidas para requisições AJAX/Fetch com credenciais/headers
+CORS_ALLOWED_ORIGINS = [
+    "https://meu-app-django-bc95f.web.app",
+    "https://meu-app-django-bc95f.firebaseapp.com",
+    "http://127.0.0.1:5005",  # Para testes com o emulador local do Firebase
+    "http://localhost:5005",
+]
+
+# Libera o envio de cookies e cabeçalhos de autorização entre origens diferentes
+CORS_ALLOW_CREDENTIALS = True
+
+# Confia no domínio do Firebase para envio de formulários e requisições CSRF
+CSRF_TRUSTED_ORIGINS = [
+    "https://meu-app-django-bc95f.web.app",
+    "https://meu-app-django-bc95f.firebaseapp.com",
+]
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 EMAIL_BACKEND = config(
     "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
