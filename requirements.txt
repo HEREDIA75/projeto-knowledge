@@ -10,6 +10,7 @@ dj-database-url==3.1.2
 Django==6.1.1
 django-cors-headers==4.9.0
 django-ninja==1.7.0
+django-storages==1.14.6
 firebase_admin==7.5.0
 google-api-core==2.36.0
 google-auth==2.58.0
@@ -46,3 +47,4 @@ sqlparse==0.6.0
 typing-inspection==0.4.4
 typing_extensions==4.16.0
 urllib3==2.7.0
+whitenoise==6.12.0
