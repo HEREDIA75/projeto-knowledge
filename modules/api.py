@@ -1,17 +1,42 @@
 from typing import List, Optional
 from django.shortcuts import get_object_or_404
 from ninja import NinjaAPI, Router, Schema
+from ninja.errors import HttpError
+from ninja.security import HttpBearer
+
+# --- Importação da Autenticação Padronizada e Models ---
+from core.authentication import FirebaseHttpBearer
+from core.firebase import db
 from .models import Course, Challenge, UserProgress
 from .schemas import CourseSchema, SubmitChallengeSchema, ProgressResponseSchema
-from .auth import FirebaseAuthBearer
-from core.firebase import db
 
-# Instância Principal da API
-api = NinjaAPI(title="Knowledge Project API", version="1.0.0")
+# --- Importação dos Routers de Outros Módulos (Caminhos Corrigidos) ---
+from modules.financeiro.api import router as financeiro_router
 
-# --- Instâncias de Autenticação e Routers ---
-firebase_auth = FirebaseAuthBearer()
+# Descomente conforme os módulos forem criados:
+# from modules.estoque.api import router as estoque_router
+# from modules.vendas.api import router as vendas_router
 
+
+# --- Configuração da Autenticação para a Documentação OpenAPI/Swagger ---
+class SwaggerFirebaseBearer(HttpBearer):
+    def authenticate(self, request, token):
+        return FirebaseHttpBearer().authenticate(request, token)
+
+
+firebase_auth = FirebaseHttpBearer()
+
+
+# --- Instância Principal da API ---
+api = NinjaAPI(
+    title="ERP & Knowledge Platform API",
+    version="1.0.0",
+    description="API unificada para Gestão Empresarial e Plataforma Educacional",
+    docs_url="/docs",
+)
+
+
+# --- Routers Internos do Módulo ---
 user_router = Router(tags=["Usuário"])
 games_router = Router(tags=["Jogos Interativos"])
 
@@ -81,22 +106,25 @@ JOGOS_DISPONIVEIS = [
 # --- Rotas Globais / Públicas ---
 @api.get("/healthcheck", response=HealthCheckSchema, tags=["Sistema"])
 def healthcheck(request):
+    """Verifica a integridade do sistema e conexão com o Firebase DB."""
     return {"status": "online", "firebase_connected": db is not None}
 
 
 @api.get("/courses", response=List[CourseSchema], tags=["Cursos"])
 def list_courses(request):
+    """Lista todos os cursos ativos na plataforma."""
     return Course.objects.filter(is_active=True)
 
 
 # --- Rotas do Router: Usuário ---
 @user_router.get("/profile", response=UserProfileSchema, auth=firebase_auth)
 def get_user_profile(request):
-    user_data = request.auth
+    """Retorna o perfil do usuário autenticado via Firebase."""
+    user = request.auth
     return {
-        "uid": user_data.get("uid"),
-        "email": user_data.get("email"),
-        "name": user_data.get("name", "Usuário"),
+        "uid": user.username,
+        "email": user.email,
+        "name": user.first_name or user.username,
     }
 
 
@@ -106,13 +134,14 @@ def get_user_profile(request):
     auth=firebase_auth,
 )
 def submit_challenge(request, payload: SubmitChallengeSchema):
-    firebase_uid = request.auth.get("uid")
+    """Valida o código submetido em um desafio e atualiza o progresso."""
+    user = request.auth
     challenge = get_object_or_404(Challenge, id=payload.challenge_id)
 
     is_correct = payload.submitted_code.strip() == challenge.expected_output.strip()
 
     progress, _ = UserProgress.objects.update_or_create(
-        firebase_uid=firebase_uid,
+        user=user,
         challenge=challenge,
         defaults={"submitted_code": payload.submitted_code, "completed": is_correct},
     )
@@ -128,11 +157,11 @@ def listar_jogos(request):
 
 @games_router.get("/{slug}", response=GameSchema)
 def obter_jogo(request, slug: str):
-    """Retorna os detalhes de um jogo específico pelo slug."""
+    """Retorna os detalhes de um jogo específico pelo slug ou id."""
     for jogo in JOGOS_DISPONIVEIS:
         if jogo["slug"] == slug or jogo["id"] == slug:
             return jogo
-    return get_object_or_404(Course, id=-1)  # Dispara 404 padronizado do Django
+    raise HttpError(404, "Jogo não encontrado.")
 
 
 @games_router.post(
@@ -140,18 +169,19 @@ def obter_jogo(request, slug: str):
 )
 def registrar_pontuacao_jogo(request, slug: str, payload: GameSubmitPayloadSchema):
     """Registra o progresso e a pontuação obtida pelo usuário ao finalizar uma partida."""
-    firebase_uid = request.auth.get("uid")
-
-    # Aqui você pode salvar a pontuação na Model de progresso do usuário ou no Firestore/Realtime DB
+    user = request.auth
     pontos_calculados = payload.score * 10
 
     return {
         "sucesso": True,
         "pontos_ganhos": pontos_calculados,
-        "mensagem": f"Partida registrada com sucesso para o usuário {firebase_uid}!",
+        "mensagem": f"Partida registrada com sucesso para o usuário {user.email or user.username}!",
     }
 
 
-# --- Registro dos Routers na API ---
+# --- Registro de Todos os Routers na API Unificada ---
 api.add_router("/user", user_router)
 api.add_router("/jogos", games_router)
+api.add_router("/financeiro", financeiro_router)
+# api.add_router("/estoque", estoque_router)
+# api.add_router("/vendas", vendas_router)

@@ -40,6 +40,9 @@ INSTALLED_APPS = [
     "corsheaders",
     "storages",
     "modules",
+    "modules.estoque",
+    "modules.vendas",
+    "modules.financeiro",
 ]
 
 MIDDLEWARE = [
@@ -175,3 +178,13 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 EMAIL_BACKEND = config(
     "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
 )
+
+# -----------------------------------------------------------------------------
+# Celery Configuration (Usando Redis)
+# -----------------------------------------------------------------------------
+CELERY_BROKER_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/0")
+CELERY_RESULT_BACKEND = config("REDIS_URL", default="redis://127.0.0.1:6379/0")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
