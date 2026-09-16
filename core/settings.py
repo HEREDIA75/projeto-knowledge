@@ -62,9 +62,7 @@ ROOT_URLCONF = "core.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [
-            BASE_DIR / "templates"
-        ],  # <-- IMPORTANTE: Aponta para a pasta templates na raiz
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -80,18 +78,41 @@ TEMPLATES = [
 WSGI_APPLICATION = "core.wsgi.application"
 
 # -----------------------------------------------------------------------------
-# Banco de Dados
+# Banco de Dados (Suporte Dinâmico Render / Docker / Fallback SQLite)
 # -----------------------------------------------------------------------------
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "erp_db",
-        "USER": "erp_user",
-        "PASSWORD": "erp_password",
-        "HOST": "127.0.0.1",  # ou 'db' se o próprio Django rodar dentro do Docker
-        "PORT": "5432",
+DATABASE_URL = config("DATABASE_URL", default=None)
+
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    # Se DATABASE_URL não estiver definida (ex: etapa de Build no Render),
+    # usa conexão direta local do Postgres se estiver em DEBUG, caso contrário SQLite.
+    if DEBUG:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.postgresql",
+                "NAME": config("POSTGRES_DB", default="erp_db"),
+                "USER": config("POSTGRES_USER", default="erp_user"),
+                "PASSWORD": config("POSTGRES_PASSWORD", default="erp_password"),
+                "HOST": config("POSTGRES_HOST", default="127.0.0.1"),
+                "PORT": config("POSTGRES_PORT", default="5432"),
+            }
+        }
+    else:
+        # Fallback seguro para evitar travamento de build no Render
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": BASE_DIR / "db.sqlite3",
+            }
+        }
+
 # -----------------------------------------------------------------------------
 # Validação de Senhas & Internacionalização
 # -----------------------------------------------------------------------------
@@ -114,7 +135,7 @@ USE_TZ = True
 # -----------------------------------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [BASE_DIR / "public"] if (BASE_DIR / "static").exists() else []
+STATICFILES_DIRS = [BASE_DIR / "public"] if (BASE_DIR / "public").exists() else []
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -156,16 +177,12 @@ if USE_GCP_STORAGE:
     MEDIA_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/media/"
 
 # -----------------------------------------------------------------------------
-# CORS & E-mail
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
 # CORS & CSRF Settings
 # -----------------------------------------------------------------------------
-# Origens específicas permitidas para requisições AJAX/Fetch com credenciais/headers
 CORS_ALLOWED_ORIGINS = [
     "https://meu-app-django-bc95f.web.app",
     "https://meu-app-django-bc95f.firebaseapp.com",
-    "http://127.0.0.1:5005",  # Para testes com o emulador local do Firebase
+    "http://127.0.0.1:5005",
     "http://localhost:5005",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -173,13 +190,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8085",
 ]
 
-# Libera o envio de cookies e cabeçalhos de autorização entre origens diferentes
 CORS_ALLOW_CREDENTIALS = True
 
-# Confia no domínio do Firebase para envio de formulários e requisições CSRF
 CSRF_TRUSTED_ORIGINS = [
     "https://meu-app-django-bc95f.web.app",
     "https://meu-app-django-bc95f.firebaseapp.com",
+    "https://*.onrender.com",
 ]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
