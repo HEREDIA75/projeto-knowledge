@@ -46,9 +46,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -83,11 +83,15 @@ WSGI_APPLICATION = "core.wsgi.application"
 # Banco de Dados
 # -----------------------------------------------------------------------------
 DATABASES = {
-    "default": dj_database_url.config(
-        default=config("DATABASE_URL", default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
-    )
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "erp_db",
+        "USER": "erp_user",
+        "PASSWORD": "erp_password",
+        "HOST": "127.0.0.1",  # ou 'db' se o próprio Django rodar dentro do Docker
+        "PORT": "5432",
+    }
 }
-
 # -----------------------------------------------------------------------------
 # Validação de Senhas & Internacionalização
 # -----------------------------------------------------------------------------
@@ -163,6 +167,10 @@ CORS_ALLOWED_ORIGINS = [
     "https://meu-app-django-bc95f.firebaseapp.com",
     "http://127.0.0.1:5005",  # Para testes com o emulador local do Firebase
     "http://localhost:5005",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8085",
+    "http://127.0.0.1:8085",
 ]
 
 # Libera o envio de cookies e cabeçalhos de autorização entre origens diferentes
