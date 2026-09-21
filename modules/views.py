@@ -1,7 +1,9 @@
 import os
 from django.conf import settings
-from django.http import HttpResponse, Http404
-from django.shortcuts import render, get_object_or_404
+from django.http import Http404, HttpResponse
+from django.shortcuts import get_object_or_404, render
+from django.views.decorators.clickjacking import xframe_options_exempt
+
 from .models import Course, Lesson
 
 
@@ -41,15 +43,18 @@ def jogos_view(request):
     return render(request, "jogos.html", context)
 
 
+@xframe_options_exempt
 def neon_tetris_view(request):
     """
-    Servidor de contingência local para o Neon Tetris em public/jogos/neon-tetris/index.html.
-    Em produção no Firebase, o Hosting intercepta e serve este arquivo diretamente.
+    Renderiza o jogo Neon Tetris permitindo exibição em <iframe>.
+    Se existir no diretório public/, serve o ficheiro; caso contrário, utiliza os templates do Django.
     """
     game_path = os.path.join(
         settings.BASE_DIR, "public", "jogos", "neon-tetris", "index.html"
     )
+
     if os.path.exists(game_path):
         with open(game_path, "r", encoding="utf-8") as f:
             return HttpResponse(f.read(), content_type="text/html")
-    raise Http404("Jogo Neon Tetris não encontrado na pasta public/.")
+
+    return render(request, "jogos/neon-tetris/index.html")
