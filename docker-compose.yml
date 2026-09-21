@@ -1,25 +1,108 @@
-version: '3.8'
+x-django-env: &django-env
+  POSTGRES_DB: ${POSTGRES_DB:-erp_db}
+  POSTGRES_USER: ${POSTGRES_USER:-erp_user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erp_password}
+  DB_HOST: db
+  REDIS_URL: redis://redis:6379/0
 
 services:
   db:
     image: postgres:15-alpine
     container_name: erp_postgres
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: erp_db
-      POSTGRES_USER: erp_user
-      POSTGRES_PASSWORD: erp_password
+      POSTGRES_DB: ${POSTGRES_DB:-erp_db}
+      POSTGRES_USER: ${POSTGRES_USER:-erp_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erp_password}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-erp_user} -d ${POSTGRES_DB:-erp_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: erp_redis
-    restart: always
+    restart: unless-stopped
+    command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: erp_django
+    restart: unless-stopped
+    command: gunicorn core.wsgi:application --bind 0.0.0.0:8000
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    expose:
+      - "8000"
+    environment:
+      <<: *django-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_worker:
+    build: .
+    container_name: erp_celery_worker
+    restart: unless-stopped
+    command: celery -A core worker -l info
+    volumes:
+      - .:/app
+    environment:
+      <<: *django-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_beat:
+    build: .
+    container_name: erp_celery_beat
+    restart: unless-stopped
+    command: celery -A core beat -l info
+    volumes:
+      - .:/app
+    environment:
+      <<: *django-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    container_name: erp_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+    depends_on:
+      - web
 
 volumes:
   postgres_data:
+  redis_data:
+  static_volume:
+  media_volume:

@@ -2,9 +2,8 @@
 Django settings for core project (Knowledge Platform).
 """
 
-import os
 from pathlib import Path
-from decouple import config, Csv
+from decouple import Csv, config
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -17,16 +16,18 @@ SECRET_KEY = config(
 )
 DEBUG = config("DEBUG", default=True, cast=bool)
 
-# Inclui .onrender.com por padrão para garantir o funcionamento em produção
-ALLOWED_HOSTS = config(
-    "ALLOWED_HOSTS",
-    default="127.0.0.1,localhost,.web.app,.firebaseapp.com,.onrender.com",
-    cast=Csv(),
-)
+ALLOWED_HOSTS = [
+    "promptdevgames.com.br",
+    "www.promptdevgames.com.br",
+    "api.promptdevgames.com.br",
+    "projeto-knowledge.onrender.com",
+    "localhost",
+    "127.0.0.1",
+]
 
-# Trata cabeçalhos de proxy do Render (resolve problemas de HTTPS e CSRF)
+# Configurações de HTTPS para operar atrás do proxy Cloudflare/Render
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-
+USE_X_FORWARDED_HOST = True
 # -----------------------------------------------------------------------------
 # Aplicações
 # -----------------------------------------------------------------------------
@@ -78,7 +79,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "core.wsgi.application"
 
 # -----------------------------------------------------------------------------
-# Banco de Dados (Suporte Dinâmico Render / Docker / Fallback SQLite)
+# Banco de Dados
 # -----------------------------------------------------------------------------
 DATABASE_URL = config("DATABASE_URL", default=None)
 
@@ -91,8 +92,6 @@ if DATABASE_URL:
         )
     }
 else:
-    # Se DATABASE_URL não estiver definida (ex: etapa de Build no Render),
-    # usa conexão direta local do Postgres se estiver em DEBUG, caso contrário SQLite.
     if DEBUG:
         DATABASES = {
             "default": {
@@ -100,12 +99,13 @@ else:
                 "NAME": config("POSTGRES_DB", default="erp_db"),
                 "USER": config("POSTGRES_USER", default="erp_user"),
                 "PASSWORD": config("POSTGRES_PASSWORD", default="erp_password"),
-                "HOST": config("POSTGRES_HOST", default="127.0.0.1"),
+                "HOST": config(
+                    "POSTGRES_HOST", default=config("DB_HOST", default="127.0.0.1")
+                ),
                 "PORT": config("POSTGRES_PORT", default="5432"),
             }
         }
     else:
-        # Fallback seguro para evitar travamento de build no Render
         DATABASES = {
             "default": {
                 "ENGINE": "django.db.backends.sqlite3",
@@ -131,13 +131,13 @@ USE_I18N = True
 USE_TZ = True
 
 # -----------------------------------------------------------------------------
-# Configuração de Storages (Estáticos e Mídia)
+# Storages (Estáticos e Mídia)
 # -----------------------------------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "public"] if (BASE_DIR / "public").exists() else []
 
-MEDIA_URL = "media/"
+MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 STORAGES = {
@@ -145,11 +145,15 @@ STORAGES = {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": (
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
+            if DEBUG
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        ),
     },
 }
 
-# Integração com Google Cloud Storage / Firebase Storage
+# GCP / Firebase Storage
 USE_GCP_STORAGE = config("USE_GCP_STORAGE", default=not DEBUG, cast=bool)
 
 if USE_GCP_STORAGE:
@@ -177,7 +181,7 @@ if USE_GCP_STORAGE:
     MEDIA_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/media/"
 
 # -----------------------------------------------------------------------------
-# CORS & CSRF Settings
+# CORS & CSRF
 # -----------------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
     "https://meu-app-django-bc95f.web.app",
@@ -196,6 +200,10 @@ CSRF_TRUSTED_ORIGINS = [
     "https://meu-app-django-bc95f.web.app",
     "https://meu-app-django-bc95f.firebaseapp.com",
     "https://*.onrender.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -204,7 +212,7 @@ EMAIL_BACKEND = config(
 )
 
 # -----------------------------------------------------------------------------
-# Celery Configuration (Usando Redis)
+# Celery
 # -----------------------------------------------------------------------------
 CELERY_BROKER_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/0")
 CELERY_RESULT_BACKEND = config("REDIS_URL", default="redis://127.0.0.1:6379/0")

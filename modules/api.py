@@ -2,30 +2,24 @@ from typing import List, Optional
 from django.shortcuts import get_object_or_404
 from ninja import NinjaAPI, Router, Schema
 from ninja.errors import HttpError
-from ninja.security import HttpBearer
 
-# --- Importação da Autenticação Padronizada e Models ---
+# --- Autenticação Padronizada ---
 from core.authentication import FirebaseHttpBearer
 from core.firebase import db
+
+# --- Models e Schemas do Módulo Principal ---
 from .models import Course, Challenge, UserProgress
 from .schemas import CourseSchema, SubmitChallengeSchema, ProgressResponseSchema
 
-# --- Importação dos Routers de Outros Módulos (Caminhos Corrigidos) ---
-from modules.financeiro.api import router as financeiro_router
+# --- Routers de Outros Módulos (ERP) ---
+from modules.financeiro.views import router as financeiro_router
 
-# Descomente conforme os módulos forem criados:
-# from modules.estoque.api import router as estoque_router
-# from modules.vendas.api import router as vendas_router
-
-
-# --- Configuração da Autenticação para a Documentação OpenAPI/Swagger ---
-class SwaggerFirebaseBearer(HttpBearer):
-    def authenticate(self, request, token):
-        return FirebaseHttpBearer().authenticate(request, token)
+# Descomente conforme os novos módulos forem implementados:
+# from modules.estoque.views import router as estoque_router
+# from modules.vendas.views import router as vendas_router
 
 
 firebase_auth = FirebaseHttpBearer()
-
 
 # --- Instância Principal da API ---
 api = NinjaAPI(
@@ -34,7 +28,6 @@ api = NinjaAPI(
     description="API unificada para Gestão Empresarial e Plataforma Educacional",
     docs_url="/docs",
 )
-
 
 # --- Routers Internos do Módulo ---
 user_router = Router(tags=["Usuário"])
@@ -122,9 +115,10 @@ def get_user_profile(request):
     """Retorna o perfil do usuário autenticado via Firebase."""
     user = request.auth
     return {
-        "uid": user.username,
-        "email": user.email,
-        "name": user.first_name or user.username,
+        "uid": getattr(user, "username", str(user)),
+        "email": getattr(user, "email", None),
+        "name": getattr(user, "first_name", None)
+        or getattr(user, "username", "Usuário"),
     }
 
 
@@ -172,10 +166,12 @@ def registrar_pontuacao_jogo(request, slug: str, payload: GameSubmitPayloadSchem
     user = request.auth
     pontos_calculados = payload.score * 10
 
+    identificador = getattr(user, "email", None) or getattr(user, "username", "Usuário")
+
     return {
         "sucesso": True,
         "pontos_ganhos": pontos_calculados,
-        "mensagem": f"Partida registrada com sucesso para o usuário {user.email or user.username}!",
+        "mensagem": f"Partida registrada com sucesso para o usuário {identificador}!",
     }
 
 

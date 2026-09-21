@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from ninja import Router
 
 from core.authentication import FirebaseHttpBearer
-from .models import TransacaoFinanceira, ContaBancaria
+from .models import ContaBancaria, TransacaoFinanceira
 from .schemas import (
     ContaBancariaInSchema,
     ContaBancariaOutSchema,
