@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Psicologia Clínica | Atendimento Presencial e Online</title>
+
+    <!-- Aponta para a diretoria correta de estáticos do Django/WhiteNoise -->
+    <link rel="stylesheet" href="/static/jogos/psicologia/estilo.css">
+
+    <!-- Google Fonts & FontAwesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body>
+
+  <!-- Cabeçalho -->
+  <header class="header">
+    <div class="container nav-container">
+      <a href="#" class="logo">
+        <i class="fa-solid fa-brain"></i>
+        <span>Psicologia & Cuidado</span>
+      </a>
+      <nav class="nav-menu">
+        <a href="#sobre">Sobre</a>
+        <a href="#servicos">Atendimentos</a>
+        <a href="#contato" class="btn-nav">Agendar Consulta</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Seção Principal / Hero -->
+  <section class="hero">
+    <div class="container hero-container">
+      <div class="hero-text">
+        <span class="badge">Atendimento Presencial e Online</span>
+        <h1>Sua saúde mental e bem-estar em primeiro lugar</h1>
+        <p>Um espaço acolhedor e seguro para te ajudar no processo de autoconhecimento, superação de conflitos e equilíbrio emocional.</p>
+        <div class="hero-btns">
+          <a href="https://wa.me/5500000000000?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta." target="_blank" class="btn btn-primary">
+            <i class="fa-brands fa-whatsapp"></i> Agendar pelo WhatsApp
+          </a>
+        </div>
+      </div>
+      <div class="hero-card">
+        <div class="profile-img-placeholder">
+          <i class="fa-solid fa-user-doctor"></i>
+        </div>
+        <h3>Dra. [Nome da Tia]</h3>
+        <p class="crp">Psicóloga Clínica • CRP 00/00000</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sobre -->
+  <section id="sobre" class="section sobre">
+    <div class="container grid-2">
+      <div class="sobre-info">
+        <h2>Sobre o Atendimento</h2>
+        <p>Acompanhamento psicológico pautado pela ética, empatia e compromisso com o bem-estar do paciente.</p>
+        <ul class="check-list">
+          <li><i class="fa-solid fa-check"></i> Atendimento individualizado</li>
+          <li><i class="fa-solid fa-check"></i> Sigilo profissional (conforme CFP)</li>
+          <li><i class="fa-solid fa-check"></i> Horários flexíveis</li>
+        </ul>
+      </div>
+      <div class="card-destaque">
+        <i class="fa-solid fa-quote-left icon-quote"></i>
+        <p>"Olhar para dentro de si é o primeiro passo para transformar a sua relação com o mundo."</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Modalidades / Serviços -->
+  <section id="servicos" class="section bg-light">
+    <div class="container">
+      <div class="section-title">
+        <h2>Modalidades de Atendimento</h2>
+      </div>
+      <div class="cards-grid">
+        <div class="card">
+          <i class="fa-solid fa-laptop-medical card-icon"></i>
+          <h3>Terapia Online</h3>
+          <p>Consultas por videochamada com total privacidade e comodidade de onde você estiver.</p>
+        </div>
+        <div class="card">
+          <i class="fa-solid fa-clinic-medical card-icon"></i>
+          <h3>Terapia Presencial</h3>
+          <p>Atendimento em consultório preparado com conforto e ambiente reservado.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Rodapé -->
+  <footer id="contato" class="footer">
+    <div class="container footer-container">
+      <div>
+        <h3>Agende sua Sessão</h3>
+        <p>Entre em contato via WhatsApp para consultar horários disponíveis.</p>
+      </div>
+      <div>
+        <a href="https://wa.me/5500000000000" target="_blank" class="btn btn-whatsapp">
+          <i class="fa-brands fa-whatsapp"></i> Contato WhatsApp
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Script da aplicação (opcional) -->
+  <script src="/static/jogos/psicologia/script.js" defer></script>
+</body>
+</html>

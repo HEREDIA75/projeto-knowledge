@@ -29,9 +29,10 @@ api = NinjaAPI(
     docs_url="/docs",
 )
 
-# --- Routers Internos do Módulo ---
+# --- Routers Internos ---
 user_router = Router(tags=["Usuário"])
 games_router = Router(tags=["Jogos Interativos"])
+produtos_router = Router(tags=["Produtos & Catálogo"])
 
 
 # --- Schemas ---
@@ -65,6 +66,13 @@ class GameSubmitResponseSchema(Schema):
     sucesso: bool
     pontos_ganhos: int
     mensagem: str
+
+
+class ProdutoSchema(Schema):
+    id: int
+    nome: str
+    preco: float
+    estoque: int
 
 
 # --- Base de Dados Estática / Mapeamento de Jogos ---
@@ -175,9 +183,22 @@ def registrar_pontuacao_jogo(request, slug: str, payload: GameSubmitPayloadSchem
     }
 
 
+# --- Rotas do Router: Produtos (Atende o endpoint /api/v1/produtos) ---
+@produtos_router.get("", response=List[ProdutoSchema])
+def listar_produtos(request):
+    """Retorna o catálogo de produtos para sincronização do PDV/Frontend."""
+    # Substitua pelo seu model real quando integrado (ex: Produto.objects.all())
+    return [
+        {"id": 1, "nome": "Teclado Mecânico RGB", "preco": 250.00, "estoque": 15},
+        {"id": 2, "nome": "Mouse Gamer 16000 DPI", "preco": 120.00, "estoque": 30},
+        {"id": 3, "nome": "Monitor 24' Full HD 144Hz", "preco": 899.90, "estoque": 8},
+    ]
+
+
 # --- Registro de Todos os Routers na API Unificada ---
 api.add_router("/user", user_router)
 api.add_router("/jogos", games_router)
 api.add_router("/financeiro", financeiro_router)
+api.add_router("/v1/produtos", produtos_router)  # Mapeia a rota para /api/v1/produtos
 # api.add_router("/estoque", estoque_router)
 # api.add_router("/vendas", vendas_router)

@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from ninja.testing import TestClient
 
-from modules.api import api
+from .api import router
 from modules.financeiro.models import TransacaoFinanceira, ContaBancaria
 
 User = get_user_model()
@@ -12,16 +12,18 @@ User = get_user_model()
 
 class FinanceiroAPITestCase(TestCase):
     def setUp(self):
-        self.client = TestClient(api)
+        # Instancia o TestClient direto no router do módulo
+        self.client = TestClient(router)
 
         # Usuário de teste
         self.user = User.objects.create_user(
             id=1, username="test_firebase_uid_123", email="teste@empresa.com"
         )
 
-        # Conta bancária para testes de saldo
+        # Conta bancária (sem campo 'usuario')
         self.conta = ContaBancaria.objects.create(
-            nome="Banco do Brasil", saldo_atual=Decimal("1000.00")
+            nome="Banco do Brasil",
+            saldo_atual=Decimal("1000.00"),
         )
 
     @patch("core.authentication.FirebaseHttpBearer.authenticate")
@@ -38,7 +40,7 @@ class FinanceiroAPITestCase(TestCase):
         }
 
         response = self.client.post(
-            "/financeiro/transacoes",
+            "/transacoes",
             json=payload,
             headers={"Authorization": "Bearer fake_firebase_token"},
         )
@@ -53,7 +55,6 @@ class FinanceiroAPITestCase(TestCase):
     def test_atualizar_status_transacao_e_alterar_saldo(self, mock_auth):
         mock_auth.return_value = self.user
 
-        # Cria transação pendente no banco
         transacao = TransacaoFinanceira.objects.create(
             usuario=self.user,
             conta=self.conta,
@@ -68,9 +69,8 @@ class FinanceiroAPITestCase(TestCase):
             "data_pagamento": "2026-09-15",
         }
 
-        # Atualiza status para PAGO via PATCH
         response = self.client.patch(
-            f"/financeiro/transacoes/{transacao.id}/status",
+            f"/transacoes/{transacao.id}/status",
             json=payload,
             headers={"Authorization": "Bearer fake_firebase_token"},
         )
@@ -78,7 +78,6 @@ class FinanceiroAPITestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "PAGO")
 
-        # Garante que o signal incrementou o saldo de R$ 1000.00 para R$ 1500.00
         self.conta.refresh_from_db()
         self.assertEqual(self.conta.saldo_atual, Decimal("1500.00"))
 
@@ -92,8 +91,7 @@ class FinanceiroAPITestCase(TestCase):
             mock_task.return_value.id = "mocked-task-uuid-12345"
 
             response = self.client.post(
-                "/financeiro/relatorios/solicitar",
-                user=self.user,
+                "/relatorios/solicitar",
                 headers={"Authorization": "Bearer fake_firebase_token"},
             )
 

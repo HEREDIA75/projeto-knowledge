@@ -8,9 +8,6 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# -----------------------------------------------------------------------------
-# Segurança e Ambiente
-# -----------------------------------------------------------------------------
 SECRET_KEY = config(
     "SECRET_KEY", default="django-insecure-chave-temporaria-desenvolvimento-123"
 )
@@ -25,9 +22,9 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
 ]
 
-# Configurações de HTTPS para operar atrás do proxy Cloudflare/Render
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
+
 # -----------------------------------------------------------------------------
 # Aplicações
 # -----------------------------------------------------------------------------
@@ -49,8 +46,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # Adicione logo abaixo de SecurityMiddleware
-    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Duplicidade Removida aqui
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -136,7 +132,10 @@ USE_TZ = True
 # -----------------------------------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [BASE_DIR / "public"] if (BASE_DIR / "public").exists() else []
+
+STATICFILES_DIRS = [
+    folder for folder in [BASE_DIR / "static", BASE_DIR / "public"] if folder.exists()
+]
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -154,7 +153,6 @@ STORAGES = {
     },
 }
 
-# GCP / Firebase Storage
 USE_GCP_STORAGE = config("USE_GCP_STORAGE", default=not DEBUG, cast=bool)
 
 if USE_GCP_STORAGE:
@@ -185,6 +183,7 @@ if USE_GCP_STORAGE:
 # CORS & CSRF
 # -----------------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
+    "https://promptdevgames.com.br",
     "https://meu-app-django-bc95f.web.app",
     "https://meu-app-django-bc95f.firebaseapp.com",
     "http://127.0.0.1:5005",
@@ -193,6 +192,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:8085",
     "http://127.0.0.1:8085",
+    "http://localhost:3000",
+    "http://127.0.0.1:8000",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -205,6 +206,15 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+]
+
+CORS_ALLOW_HEADERS = [
+    "authorization",
+    "content-type",
+    "accept",
+    "origin",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

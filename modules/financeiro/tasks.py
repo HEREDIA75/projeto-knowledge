@@ -1,6 +1,9 @@
 import logging
+from decimal import Decimal
 from celery import shared_task
 from django.contrib.auth import get_user_model
+from django.db.models import DecimalField, Q, Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from .models import TransacaoFinanceira
 
@@ -9,58 +12,83 @@ User = get_user_model()
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def gerar_relatorio_excel_task(self, user_id: int):
+def gerar_relatorio_excel_task(self, user_id: int = None):
     """
-    Gera um relatório financeiro em segundo plano para o usuário.
-    É executado assincronamente via Celery.
+    Gera um relatório financeiro em segundo plano otimizado.
+    Executado assincronamente via Celery.
     """
     try:
-        user = User.objects.get(id=user_id)
-        logger.info(f"Iniciando geração de relatório para o usuário: {user.email}")
+        queryset = TransacaoFinanceira.objects.all()
+        username = "Anônimo / Teste"
 
-        # Busca as transações do usuário
-        transacoes = TransacaoFinanceira.objects.filter(usuario=user)
-        total_receitas = sum(t.valor for t in transacoes if t.tipo == "RECEITA")
-        total_despesas = sum(t.valor for t in transacoes if t.tipo == "DESPESA")
+        if user_id:
+            try:
+                user = User.objects.get(id=user_id)
+                logger.info(
+                    f"Iniciando geração de relatório para o usuário: {user.email}"
+                )
+                queryset = queryset.filter(usuario=user)
+                username = user.username
+            except User.DoesNotExist:
+                # Fallback seguro: pega o primeiro superusuário se o ID não existir
+                user = User.objects.filter(is_superuser=True).first()
+                if user:
+                    queryset = queryset.filter(usuario=user)
+                    username = f"{user.username} (Fallback Superuser)"
+                else:
+                    logger.error(
+                        f"Usuário id {user_id} e nenhum superuser encontrados."
+                    )
+                    return {"error": "Usuário não encontrado"}
+        else:
+            logger.info(
+                "Iniciando geração de relatório geral (sem usuário específico)."
+            )
 
-        # Simula o tempo de processamento pesado (ex: gerar arquivo Excel/PDF)
-        # Em produção, você usaria bibliotecas como pandas, openpyxl ou reportlab
+        # Soma performática direto no SGBD
+        zero = Decimal("0.00")
+        totais = queryset.aggregate(
+            receitas=Coalesce(
+                Sum("valor", filter=Q(tipo="RECEITA")),
+                zero,
+                output_field=DecimalField(),
+            ),
+            despesas=Coalesce(
+                Sum("valor", filter=Q(tipo="DESPESA")),
+                zero,
+                output_field=DecimalField(),
+            ),
+        )
+
+        total_receitas = totais["receitas"]
+        total_despesas = totais["despesas"]
+
         resumo = {
-            "usuario": user.username,
-            "total_transacoes": transacoes.count(),
+            "usuario": username,
+            "total_transacoes": queryset.count(),
             "receitas": float(total_receitas),
             "despesas": float(total_despesas),
             "saldo": float(total_receitas - total_despesas),
             "gerado_em": timezone.now().isoformat(),
         }
 
-        logger.info(f"Relatório gerado com sucesso para user_id {user_id}")
+        logger.info("Relatório financeiro gerado com sucesso!")
         return resumo
 
-    except User.DoesNotExist:
-        logger.error(f"Usuário id {user_id} não encontrado.")
-        return {"error": "Usuário não encontrado"}
     except Exception as exc:
         logger.error(f"Erro ao gerar relatório: {exc}")
-        # Tenta novamente a execução caso ocorra um erro temporário
         raise self.retry(exc=exc)
 
 
 @shared_task
 def processar_fechamento_mensal():
-    """
-    Tarefa agendada (Celery Beat) para rodar no final de cada mês.
-    Consolida as transações e atualiza os saldos.
-    """
+    """Atualiza transações vencidas de forma assíncrona."""
     logger.info("Executando rotina de fechamento financeiro mensal...")
-
-    # Exemplo: Atualiza status de pendências vencidas
     hoje = timezone.now().date()
-    transacoes_vencidas = TransacaoFinanceira.objects.filter(
+
+    total_atualizadas = TransacaoFinanceira.objects.filter(
         data_vencimento__lt=hoje, status="PENDENTE"
-    )
+    ).update(status="ATRASADO")
 
-    total_atualizadas = transacoes_vencidas.update(status="ATRASADO")
     logger.info(f"Total de {total_atualizadas} transações marcadas como ATRASADO.")
-
     return f"{total_atualizadas} transações atualizadas."

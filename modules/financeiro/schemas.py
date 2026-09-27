@@ -1,62 +1,40 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 from ninja import Schema
+from pydantic import ConfigDict, Field
+
+# Tipo literal para garantir integridade do tipo de transação
+TipoTransacao = Literal["RECEITA", "DESPESA"]
+StatusTransacao = Literal["PENDENTE", "PAGO", "CANCELADO"]
 
 
-class TransacaoInSchema(Schema):
-    descricao: str
-    valor: Decimal
-    tipo: str  # "RECEITA" ou "DESPESA"
-    status: Optional[str] = "PENDENTE"  # "PENDENTE", "PAGO", "ATRASADO", "CANCELADO"
-    conta_id: Optional[int] = None
-    data_vencimento: Optional[date] = None
-    data_pagamento: Optional[date] = None
-
-
-class TransacaoOutSchema(Schema):
-    id: int
-    descricao: str
-    valor: Decimal
-    tipo: str
-    status: str
-    conta_id: Optional[int] = None
-    data_vencimento: Optional[date] = None
-    data_pagamento: Optional[date] = None
-    criado_em: datetime
-
-
-class TransacaoUpdateStatusSchema(Schema):
-    """Schema específico para a rota PATCH de atualização de status."""
-
-    status: str  # "PAGO", "CANCELADO", etc.
-    data_pagamento: Optional[date] = None
-
-
-# --- SCHEMAS DE CONTA BANCÁRIA ---
 class ContaBancariaInSchema(Schema):
-    nome: str
-    saldo_atual: Optional[Decimal] = Decimal("0.00")
+    nome: str = Field(..., min_length=1, max_length=100)
+    saldo_atual: Decimal = Field(default=Decimal("0.00"), decimal_places=2)
 
 
 class ContaBancariaOutSchema(Schema):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     nome: str
     saldo_atual: Decimal
 
 
-# --- SCHEMAS DE TRANSAÇÃO ---
 class TransacaoInSchema(Schema):
-    descricao: str
-    valor: Decimal
-    tipo: str  # "RECEITA" ou "DESPESA"
-    status: Optional[str] = "PENDENTE"  # "PENDENTE", "PAGO", "ATRASADO", "CANCELADO"
+    descricao: str = Field(..., min_length=1)
+    valor: Decimal = Field(..., gt=0, decimal_places=2)
+    tipo: TipoTransacao
+    status: Optional[StatusTransacao] = "PENDENTE"
     conta_id: Optional[int] = None
     data_vencimento: Optional[date] = None
     data_pagamento: Optional[date] = None
 
 
 class TransacaoOutSchema(Schema):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     descricao: str
     valor: Decimal
@@ -68,13 +46,21 @@ class TransacaoOutSchema(Schema):
     criado_em: datetime
 
 
-class TransacaoUpdateStatusSchema(Schema):
-    status: str
+class BaixarLancamentoSchema(Schema):
+    """Schema específico para a requisição do endpoint POST /lancamentos/{id}/baixar/"""
+
+    conta_id: int
     data_pagamento: Optional[date] = None
 
 
-# --- SCHEMA DE DASHBOARD ---
+class TransacaoUpdateStatusSchema(Schema):
+    status: StatusTransacao
+    data_pagamento: Optional[date] = None
+
+
 class DashboardOutSchema(Schema):
+    model_config = ConfigDict(from_attributes=True)
+
     total_receitas: Decimal
     total_despesas: Decimal
     saldo_geral: Decimal

@@ -58,14 +58,19 @@ class TransacaoFinanceira(models.Model):
 
 
 @receiver(post_save, sender=TransacaoFinanceira)
-def atualizar_saldo_conta(sender, instance, created, **kwargs):
+def atualizar_saldo_conta_python(sender, instance, created, **kwargs):
     """
-    Atualiza o saldo da conta vinculada apenas quando o status for 'PAGO'.
+    Atualiza o saldo da conta em bancos não-PostgreSQL (ex: SQLite em ambiente de teste/dev).
+    No PostgreSQL, a Trigger SQL cuida do processo.
     """
+    from django.db import connection
+
+    if connection.vendor == "postgresql":
+        return
+
     if instance.conta and instance.status == "PAGO":
         with transaction.atomic():
             conta = instance.conta
-            # Se for uma nova transação ou alteração para PAGO
             if instance.tipo == "RECEITA":
                 conta.saldo_atual += instance.valor
             elif instance.tipo == "DESPESA":

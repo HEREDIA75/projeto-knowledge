@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import TemplateView
 from .views import (
     dashboard_view,
     lesson_detail_view,
@@ -16,4 +17,9 @@ urlpatterns = [
     path("jogos/", jogos_view, name="jogos_list"),
     path("jogos/neon-tetris/", neon_tetris_view, name="neon_tetris"),
     path("jogos/neon-tetris/index.html", neon_tetris_view),
+    path(
+        "jogos/psicologia/",
+        TemplateView.as_view(template_name="jogos/psicologia/psicologo.html"),
+        name="psicologo",
+    ),
 ]

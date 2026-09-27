@@ -1,169 +1,194 @@
 from decimal import Decimal
 from typing import List, Optional
+
+from django.db.models import DecimalField, Q, Sum
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
-from django.db.models import Sum
 from django.utils import timezone
 from ninja import Router, Schema
 
+from core.authentication import FirebaseHttpBearer
+from modules.financeiro.tasks import gerar_relatorio_excel_task
 from .models import ContaBancaria, TransacaoFinanceira
+from .schemas import (
+    ContaBancariaInSchema,
+    ContaBancariaOutSchema,
+    DashboardOutSchema,
+    TransacaoInSchema,
+    TransacaoOutSchema,
+    TransacaoUpdateStatusSchema,
+)
 
+# Router unificado
 router = Router(tags=["Financeiro"])
 
-# -----------------------------------------------------------------------------
-# Schemas Pydantic
-# -----------------------------------------------------------------------------
 
-
-class ContaBancariaSchema(Schema):
-    id: int
-    nome: str
-    saldo_atual: Decimal
-
-
-class ContaBancariaCreateSchema(Schema):
-    nome: str
-    saldo_inicial: Decimal = Decimal("0.00")
-
-
-class LancamentoFinanceiroSchema(Schema):
-    id: int
-    descricao: str
-    tipo: str
-    valor: Decimal
+# Schemas Adicionais do Módulo
+class MensagemStatusSchema(Schema):
     status: str
-    conta_id: Optional[int] = None
-    data_vencimento: Optional[str] = None
-    data_pagamento: Optional[str] = None
+    mensagem: str
 
 
-class LancamentoFinanceiroCreateSchema(Schema):
-    descricao: str
-    tipo: str
-    valor: Decimal
-    conta_id: Optional[int] = None
-    status: Optional[str] = "PENDENTE"
-    data_vencimento: Optional[str] = None
+class RelatorioSolicitadoSchema(Schema):
+    task_id: str
+    mensagem: str
 
 
-class DashboardFinanceiroSchema(Schema):
-    total_receitas_mes: Decimal
-    total_despesas_mes: Decimal
-    saldo_previsto: Decimal
-    saldo_real_contas: Decimal
-    contas_vencidas_count: int
+# ==========================================
+# ENDPOINT RAIZ DO MÓDULO (Evita 404 em /api/financeiro/)
+# ==========================================
 
 
-# -----------------------------------------------------------------------------
-# Endpoints: Contas Bancárias
-# -----------------------------------------------------------------------------
+@router.get("", response=MensagemStatusSchema)
+@router.get("/", response=MensagemStatusSchema)
+def resumo_financeiro_raiz(request):
+    """Endpoint de status do módulo financeiro."""
+    return {
+        "status": "online",
+        "mensagem": "Módulo Financeiro e DRE ativo com sucesso.",
+    }
 
 
-@router.get("/contas/", response=List[ContaBancariaSchema])
+# ==========================================
+# ENDPOINTS: CONTA BANCÁRIA
+# ==========================================
+
+
+@router.get("/contas", response=List[ContaBancariaOutSchema], auth=FirebaseHttpBearer())
 def listar_contas(request):
     return ContaBancaria.objects.all()
 
 
-@router.post("/contas/", response=ContaBancariaSchema)
-def criar_conta(request, payload: ContaBancariaCreateSchema):
-    conta = ContaBancaria.objects.create(
-        nome=payload.nome, saldo_atual=payload.saldo_inicial
-    )
+@router.post("/contas", response=ContaBancariaOutSchema, auth=FirebaseHttpBearer())
+def criar_conta(request, payload: ContaBancariaInSchema):
+    return ContaBancaria.objects.create(**payload.model_dump())
+
+
+@router.put(
+    "/contas/{conta_id}", response=ContaBancariaOutSchema, auth=FirebaseHttpBearer()
+)
+def atualizar_conta(request, conta_id: int, payload: ContaBancariaInSchema):
+    conta = get_object_or_404(ContaBancaria, id=conta_id)
+    for attr, value in payload.model_dump().items():
+        setattr(conta, attr, value)
+    conta.save()
     return conta
 
 
-@router.get("/contas/{conta_id}/", response=ContaBancariaSchema)
-def obter_conta(request, conta_id: int):
-    return get_object_or_404(ContaBancaria, id=conta_id)
+@router.delete("/contas/{conta_id}", auth=FirebaseHttpBearer())
+def deletar_conta(request, conta_id: int):
+    conta = get_object_or_404(ContaBancaria, id=conta_id)
+    conta.delete()
+    return {"sucesso": True, "mensagem": "Conta bancária removida com sucesso."}
 
 
-# -----------------------------------------------------------------------------
-# Endpoints: Lançamentos
-# -----------------------------------------------------------------------------
+# ==========================================
+# ENDPOINT: DASHBOARD FINANCEIRO
+# ==========================================
 
 
-@router.get("/lancamentos/", response=List[LancamentoFinanceiroSchema])
-def listar_lancamentos(
-    request,
-    tipo: Optional[str] = None,
-    status: Optional[str] = None,
-    conta_id: Optional[int] = None,
-):
-    qs = TransacaoFinanceira.objects.all().order_by("-criado_em")
-    if tipo:
-        qs = qs.filter(tipo=tipo.upper())
-    if status:
-        qs = qs.filter(status=status.upper())
-    if conta_id:
-        qs = qs.filter(conta_id=conta_id)
-    return qs
+@router.get("/dashboard", response=DashboardOutSchema, auth=FirebaseHttpBearer())
+def dashboard_financeiro(request):
+    zero = Decimal("0.00")
 
-
-@router.post("/lancamentos/", response=LancamentoFinanceiroSchema)
-def criar_lancamento(request, payload: LancamentoFinanceiroCreateSchema):
-    conta = None
-    if payload.conta_id:
-        conta = get_object_or_404(ContaBancaria, id=payload.conta_id)
-
-    # Atribui o usuário logado ou o fallback de desenvolvimento
-    user = getattr(request, "user", None)
-    if not hasattr(user, "pk") or not user.pk:
-        from django.contrib.auth import get_user_model
-
-        user = get_user_model().objects.first()
-
-    lancamento = TransacaoFinanceira.objects.create(
-        usuario=user,
-        conta=conta,
-        descricao=payload.descricao,
-        tipo=payload.tipo.upper(),
-        valor=payload.valor,
-        status=payload.status.upper(),
-        data_vencimento=payload.data_vencimento,
+    totais = TransacaoFinanceira.objects.filter(usuario=request.auth).aggregate(
+        receitas=Coalesce(
+            Sum("valor", filter=Q(tipo="RECEITA", status="PAGO")),
+            zero,
+            output_field=DecimalField(),
+        ),
+        despesas=Coalesce(
+            Sum("valor", filter=Q(tipo="DESPESA", status="PAGO")),
+            zero,
+            output_field=DecimalField(),
+        ),
+        pendente_receber=Coalesce(
+            Sum("valor", filter=Q(tipo="RECEITA", status="PENDENTE")),
+            zero,
+            output_field=DecimalField(),
+        ),
+        pendente_pagar=Coalesce(
+            Sum("valor", filter=Q(tipo="DESPESA", status="PENDENTE")),
+            zero,
+            output_field=DecimalField(),
+        ),
     )
-    return lancamento
 
-
-@router.post(
-    "/lancamentos/{lancamento_id}/baixar/", response=LancamentoFinanceiroSchema
-)
-def baixar_lancamento(request, lancamento_id: int):
-    lancamento = get_object_or_404(TransacaoFinanceira, id=lancamento_id)
-    lancamento.status = "PAGO"
-    lancamento.data_pagamento = timezone.now().date()
-    lancamento.save()
-    return lancamento
-
-
-# -----------------------------------------------------------------------------
-# Endpoint: Dashboard
-# -----------------------------------------------------------------------------
-
-
-@router.get("/dashboard/", response=DashboardFinanceiroSchema)
-def obter_dashboard(request):
-    hoje = timezone.now().date()
-    inicio_mes = hoje.replace(day=1)
-
-    receitas = TransacaoFinanceira.objects.filter(
-        tipo="RECEITA", criado_em__gte=inicio_mes, status__in=["PAGO", "PENDENTE"]
-    ).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-
-    despesas = TransacaoFinanceira.objects.filter(
-        tipo="DESPESA", criado_em__gte=inicio_mes, status__in=["PAGO", "PENDENTE"]
-    ).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
-
-    saldo_real = ContaBancaria.objects.aggregate(total=Sum("saldo_atual"))[
-        "total"
-    ] or Decimal("0.00")
-
-    vencidas_count = TransacaoFinanceira.objects.filter(
-        tipo="DESPESA", status="PENDENTE", data_vencimento__lt=hoje
-    ).count()
+    total_receitas = totais["receitas"]
+    total_despesas = totais["despesas"]
 
     return {
-        "total_receitas_mes": receitas,
-        "total_despesas_mes": despesas,
-        "saldo_previsto": receitas - despesas,
-        "saldo_real_contas": saldo_real,
-        "contas_vencidas_count": vencidas_count,
+        "total_receitas": total_receitas,
+        "total_despesas": total_despesas,
+        "saldo_geral": total_receitas - total_despesas,
+        "total_pendente_receber": totais["pendente_receber"],
+        "total_pendente_pagar": totais["pendente_pagar"],
+    }
+
+
+# ==========================================
+# ENDPOINTS: TRANSAÇÕES FINANCEIRAS
+# ==========================================
+
+
+@router.post("/transacoes", response=TransacaoOutSchema, auth=FirebaseHttpBearer())
+def criar_transacao(request, payload: TransacaoInSchema):
+    data = payload.model_dump()
+    conta_id = data.pop("conta_id", None)
+    conta = get_object_or_404(ContaBancaria, id=conta_id) if conta_id else None
+    return TransacaoFinanceira.objects.create(usuario=request.auth, conta=conta, **data)
+
+
+@router.get("/transacoes", response=List[TransacaoOutSchema], auth=FirebaseHttpBearer())
+def listar_transacoes(
+    request, tipo: Optional[str] = None, status: Optional[str] = None
+):
+    queryset = TransacaoFinanceira.objects.filter(usuario=request.auth)
+    if tipo:
+        queryset = queryset.filter(tipo=tipo.upper())
+    if status:
+        queryset = queryset.filter(status=status.upper())
+    return queryset
+
+
+@router.patch(
+    "/transacoes/{transacao_id}/status",
+    response=TransacaoOutSchema,
+    auth=FirebaseHttpBearer(),
+)
+def atualizar_status_transacao(
+    request, transacao_id: int, payload: TransacaoUpdateStatusSchema
+):
+    transacao = get_object_or_404(
+        TransacaoFinanceira, id=transacao_id, usuario=request.auth
+    )
+
+    novo_status = payload.status.upper()
+    transacao.status = novo_status
+
+    if payload.data_pagamento:
+        transacao.data_pagamento = payload.data_pagamento
+    elif novo_status == "PAGO" and not transacao.data_pagamento:
+        transacao.data_pagamento = timezone.now().date()
+
+    transacao.save()
+    return transacao
+
+
+# Rota para disparo assíncrono de relatório via Celery
+@router.post("/relatorios/solicitar", response=RelatorioSolicitadoSchema)
+def solicitar_relatorio(request):
+    user_id = None
+    if hasattr(request, "auth") and request.auth:
+        user_id = getattr(request.auth, "id", None)
+
+    if not user_id and hasattr(request, "user") and request.user.is_authenticated:
+        user_id = request.user.id
+
+    # Dispara a tarefa garantindo que user_id seja serializável (ou None)
+    task = gerar_relatorio_excel_task.delay(user_id=user_id)
+
+    return {
+        "task_id": str(task.id),
+        "mensagem": "Processamento do relatório iniciado com sucesso!",
     }

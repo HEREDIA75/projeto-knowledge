@@ -1,33 +1,47 @@
+# ==========================================
 # Python & Ambientes Virtuais
-*.pyc
+# ==========================================
 __pycache__/
-*.pyo
+*.py[cod]
+*$py.class
 venv/
 env/
+.venv/
+ENV/
 
-# Firebase & Logs
-.firebase/
-firebase-debug.log
-ui-debug.log
+# ==========================================
+# Node.js & Dependências Web
+# ==========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Credenciais e Arquivos Sensíveis
-*.json
-!firebase.json
-!skills-lock.json
-credentials/
-.env
-
-# Banco de dados local
+# ==========================================
+# Django & Arquivos Gerados
+# ==========================================
 *.sqlite3
+db.sqlite3
+staticfiles/
+media/
 
-# Arquivos estáticos coletados
-staticfiles/*credentials*.json
-*.json
-*credentials*.json
-*.json
-!firebase.json
-!skills-lock.json
-
-# Credenciais do Firebase
+# ==========================================
+# Firebase & Deploy
+# ==========================================
+.firebase/
+firebase-debug.log*
+ui-debug.log*
 firebase-credentials.json
-*.jsonfirebase-credentials.json
+
+# ==========================================
+# Credenciais, Segredos e Arquivos Sensíveis
+# ==========================================
+.env
+.env.*
+!.env.example
+credentials/
+*credentials*.json
+serviceAccountKey.json
+
+# Excluir explicitamente apenas chaves e tokens em vez de bloqueio geral de JSON
+# (Mantenha o controle de arquivos como package.json, firebase.json, skills-lock.json)

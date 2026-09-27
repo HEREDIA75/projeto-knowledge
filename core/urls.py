@@ -19,13 +19,15 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
+from django.views.generic.base import RedirectView
 
-# Importe 'api' apontando para o seu diretório modules:
 from modules.api import api
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/", api.urls),  # Instância do Django Ninja
+    path("api/", api.urls),
+    # Redireciona /favicon.ico para o arquivo estático/público
+    path("favicon.ico", RedirectView.as_view(url="/favicon.ico", permanent=True)),
     path("", include("modules.urls")),
 ]
 

@@ -1,59 +1,54 @@
-from typing import List, Optional
 from decimal import Decimal
-from django.db.models import Sum
+from typing import List, Optional
+
+from django.db.models import DecimalField, Q, Sum
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from ninja import Router
 
 from core.authentication import FirebaseHttpBearer
+from modules.financeiro.tasks import gerar_relatorio_excel_task
 from .models import ContaBancaria, TransacaoFinanceira
 from .schemas import (
     ContaBancariaInSchema,
     ContaBancariaOutSchema,
+    DashboardOutSchema,
     TransacaoInSchema,
     TransacaoOutSchema,
     TransacaoUpdateStatusSchema,
-    DashboardOutSchema,
 )
-from modules.financeiro.tasks import gerar_relatorio_excel_task
 
-router = Router(tags=["Financeiro / ERP"])
+# Autenticação global no router
+router = Router(tags=["Financeiro"], auth=FirebaseHttpBearer())
 
 
 # ==========================================
-# ENDPOINTS: CONTA BANCÁRIA (CRUD)
+# ENDPOINTS: CONTA BANCÁRIA
 # ==========================================
 
 
-@router.get("/contas", response=List[ContaBancariaOutSchema], auth=FirebaseHttpBearer())
+@router.get("/contas", response=List[ContaBancariaOutSchema])
 def listar_contas(request):
-    """Lista todas as contas bancárias cadastras."""
     return ContaBancaria.objects.all()
 
 
-@router.post("/contas", response=ContaBancariaOutSchema, auth=FirebaseHttpBearer())
+@router.post("/contas", response=ContaBancariaOutSchema)
 def criar_conta(request, payload: ContaBancariaInSchema):
-    """Cadastra uma nova conta bancária."""
-    data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
-    conta = ContaBancaria.objects.create(**data)
-    return conta
+    return ContaBancaria.objects.create(**payload.model_dump())
 
 
-@router.put(
-    "/contas/{conta_id}", response=ContaBancariaOutSchema, auth=FirebaseHttpBearer()
-)
+@router.put("/contas/{conta_id}", response=ContaBancariaOutSchema)
 def atualizar_conta(request, conta_id: int, payload: ContaBancariaInSchema):
-    """Atualiza os dados de uma conta bancária."""
     conta = get_object_or_404(ContaBancaria, id=conta_id)
-    data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
-    for attr, value in data.items():
+    for attr, value in payload.model_dump().items():
         setattr(conta, attr, value)
     conta.save()
     return conta
 
 
-@router.delete("/contas/{conta_id}", auth=FirebaseHttpBearer())
+@router.delete("/contas/{conta_id}")
 def deletar_conta(request, conta_id: int):
-    """Remove uma conta bancária."""
     conta = get_object_or_404(ContaBancaria, id=conta_id)
     conta.delete()
     return {"sucesso": True, "mensagem": "Conta bancária removida com sucesso."}
@@ -64,35 +59,43 @@ def deletar_conta(request, conta_id: int):
 # ==========================================
 
 
-@router.get("/dashboard", response=DashboardOutSchema, auth=FirebaseHttpBearer())
+@router.get("/dashboard", response=DashboardOutSchema)
 def dashboard_financeiro(request):
-    """Retorna os totais de receitas, despesas e saldo geral do usuário autenticado."""
-    qs = TransacaoFinanceira.objects.filter(usuario=request.auth)
+    zero = Decimal("0.00")
 
-    # Calculando totais com status PAGO
-    total_receitas = qs.filter(tipo="RECEITA", status="PAGO").aggregate(
-        total=Sum("valor")
-    )["total"] or Decimal("0.00")
-    total_despesas = qs.filter(tipo="DESPESA", status="PAGO").aggregate(
-        total=Sum("valor")
-    )["total"] or Decimal("0.00")
+    # Agregação em 1 query SQL
+    totais = TransacaoFinanceira.objects.filter(usuario=request.auth).aggregate(
+        receitas=Coalesce(
+            Sum("valor", filter=Q(tipo="RECEITA", status="PAGO")),
+            zero,
+            output_field=DecimalField(),
+        ),
+        despesas=Coalesce(
+            Sum("valor", filter=Q(tipo="DESPESA", status="PAGO")),
+            zero,
+            output_field=DecimalField(),
+        ),
+        pendente_receber=Coalesce(
+            Sum("valor", filter=Q(tipo="RECEITA", status="PENDENTE")),
+            zero,
+            output_field=DecimalField(),
+        ),
+        pendente_pagar=Coalesce(
+            Sum("valor", filter=Q(tipo="DESPESA", status="PENDENTE")),
+            zero,
+            output_field=DecimalField(),
+        ),
+    )
 
-    # Calculando pendências
-    total_pendente_receber = qs.filter(tipo="RECEITA", status="PENDENTE").aggregate(
-        total=Sum("valor")
-    )["total"] or Decimal("0.00")
-    total_pendente_pagar = qs.filter(tipo="DESPESA", status="PENDENTE").aggregate(
-        total=Sum("valor")
-    )["total"] or Decimal("0.00")
-
-    saldo_geral = total_receitas - total_despesas
+    total_receitas = totais["receitas"]
+    total_despesas = totais["despesas"]
 
     return {
         "total_receitas": total_receitas,
         "total_despesas": total_despesas,
-        "saldo_geral": saldo_geral,
-        "total_pendente_receber": total_pendente_receber,
-        "total_pendente_pagar": total_pendente_pagar,
+        "saldo_geral": total_receitas - total_despesas,
+        "total_pendente_receber": totais["pendente_receber"],
+        "total_pendente_pagar": totais["pendente_pagar"],
     }
 
 
@@ -101,27 +104,20 @@ def dashboard_financeiro(request):
 # ==========================================
 
 
-@router.post("/transacoes", response=TransacaoOutSchema, auth=FirebaseHttpBearer())
+@router.post("/transacoes", response=TransacaoOutSchema)
 def criar_transacao(request, payload: TransacaoInSchema):
-    """Cria uma nova transação financeira associada ao usuário autenticado."""
-    data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
-
+    data = payload.model_dump()
     conta_id = data.pop("conta_id", None)
-    conta = None
-    if conta_id:
-        conta = get_object_or_404(ContaBancaria, id=conta_id)
 
-    transacao = TransacaoFinanceira.objects.create(
-        usuario=request.auth, conta=conta, **data
-    )
-    return transacao
+    conta = get_object_or_404(ContaBancaria, id=conta_id) if conta_id else None
+
+    return TransacaoFinanceira.objects.create(usuario=request.auth, conta=conta, **data)
 
 
-@router.get("/transacoes", response=List[TransacaoOutSchema], auth=FirebaseHttpBearer())
+@router.get("/transacoes", response=List[TransacaoOutSchema])
 def listar_transacoes(
     request, tipo: Optional[str] = None, status: Optional[str] = None
 ):
-    """Lista as transações do usuário, com filtros opcionais por tipo e status."""
     queryset = TransacaoFinanceira.objects.filter(usuario=request.auth)
     if tipo:
         queryset = queryset.filter(tipo=tipo.upper())
@@ -130,33 +126,29 @@ def listar_transacoes(
     return queryset
 
 
-@router.patch(
-    "/transacoes/{transacao_id}/status",
-    response=TransacaoOutSchema,
-    auth=FirebaseHttpBearer(),
-)
+@router.patch("/transacoes/{transacao_id}/status", response=TransacaoOutSchema)
 def atualizar_status_transacao(
     request, transacao_id: int, payload: TransacaoUpdateStatusSchema
 ):
-    """
-    Atualiza o status de uma transação (ex: PENDENTE -> PAGO).
-    Aciona automaticamente a atualização do saldo da conta bancária via signal.
-    """
     transacao = get_object_or_404(
         TransacaoFinanceira, id=transacao_id, usuario=request.auth
     )
-    transacao.status = payload.status.upper()
+
+    novo_status = payload.status.upper()
+    transacao.status = novo_status
+
     if payload.data_pagamento:
         transacao.data_pagamento = payload.data_pagamento
+    elif novo_status == "PAGO" and not transacao.data_pagamento:
+        transacao.data_pagamento = timezone.now().date()
+
     transacao.save()
     return transacao
 
 
-@router.post("/relatorios/solicitar", auth=None)
+@router.post("/relatorios/solicitar")
 def solicitar_relatorio(request):
-    """Dispara a tarefa assíncrona no Celery para geração do relatório em Excel."""
-    user_id = getattr(request.user, "id", None) or 1
-
+    user_id = getattr(request.auth, "id", None) or getattr(request.user, "id", None)
     task = gerar_relatorio_excel_task.delay(user_id=user_id)
     return {
         "task_id": task.id,

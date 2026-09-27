@@ -1,0 +1,16 @@
+{
+  "name": "projeto-knowledge-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "cd erp-web && npm run dev",
+    "dev:backend": "python manage.py runserver",
+    "dev:celery": "celery -A core worker -l info",
+    "dev:all": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\" \"npm run dev:celery\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^7.0.2",
+    "vue-tsc": "^3.3.11"
+  }
+}

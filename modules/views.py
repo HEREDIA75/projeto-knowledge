@@ -3,7 +3,7 @@ from django.conf import settings
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.clickjacking import xframe_options_exempt
-
+from django.shortcuts import render
 from .models import Course, Lesson
 
 
@@ -58,3 +58,7 @@ def neon_tetris_view(request):
             return HttpResponse(f.read(), content_type="text/html")
 
     return render(request, "jogos/neon-tetris/index.html")
+
+
+def psicologia_view(request):
+    return render(request, "jogos/psicologia/psicologo.html")
