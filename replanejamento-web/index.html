@@ -1,13 +1,347 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>replanejamento-web</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduMetrics Pro - Sistema de Decisão e Intervenção Pedagógica</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="h-full flex flex-col antialiased text-slate-800">
+
+    <!-- TOP HEADER / NAVIGATION -->
+    <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-brand-600 rounded-lg text-white">
+                        <i data-lucide="line-chart" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <span class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                            EduMetrics <span class="bg-brand-500/20 text-brand-300 text-xs px-2 py-0.5 rounded border border-brand-500/30 font-semibold uppercase">Pro</span>
+                        </span>
+                        <p class="text-xs text-slate-400 hidden sm:block">Decisão & Intervenção Pedagógica (Etec/SED)</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="relative hidden lg:block">
+                        <select id="schoolSelect" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg focus:ring-brand-500 focus:border-brand-500 block p-2 pr-8">
+                            <option value="walkir">EE Prof. Walkir Vergani</option>
+                            <option value="maria_jose">EE Profª Maria José da Penha Frúgoli</option>
+                        </select>
+                    </div>
+
+                    <div class="relative">
+                        <select id="periodSelect" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg focus:ring-brand-500 focus:border-brand-500 block p-2 pr-7">
+                            <option value="3b">2026 - 3º Bimestre (Atual)</option>
+                            <option value="2b">2026 - 2º Bimestre</option>
+                            <option value="1b">2026 - 1º Bimestre</option>
+                        </select>
+                    </div>
+
+                    <button onclick="switchTab('tab-etl')" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-lg transition-colors">
+                        <i data-lucide="file-up" class="w-4 h-4 text-brand-400"></i>
+                        <span>Importar Mapão</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-slate-800/80 border-t border-slate-700/60 px-4 sm:px-6 lg:px-8">
+            <div class="max-w-7xl mx-auto flex space-x-1 overflow-x-auto text-xs font-medium text-slate-300 py-1" id="tabNav">
+                <button onclick="switchTab('tab-dashboard')" id="btn-tab-dashboard" class="tab-btn px-4 py-2 rounded-md flex items-center gap-2 border-b-2 border-brand-500 text-white font-semibold">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Visão Geral & Dashboard
+                </button>
+                <button onclick="switchTab('tab-radar')" id="btn-tab-radar" class="tab-btn px-4 py-2 rounded-md flex items-center gap-2 border-b-2 border-transparent hover:text-white">
+                    <i data-lucide="radar" class="w-4 h-4"></i> Radar de Competências
+                </button>
+                <button onclick="switchTab('tab-interventions')" id="btn-tab-interventions" class="tab-btn px-4 py-2 rounded-md flex items-center gap-2 border-b-2 border-transparent hover:text-white">
+                    <i data-lucide="target" class="w-4 h-4"></i> Central de Intervenção
+                    <span class="bg-red-500/80 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">4</span>
+                </button>
+                <button onclick="switchTab('tab-etl')" id="btn-tab-etl" class="tab-btn px-4 py-2 rounded-md flex items-center gap-2 border-b-2 border-transparent hover:text-white">
+                    <i data-lucide="database" class="w-4 h-4"></i> Importação ETL (Excel/SED)
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- COURSE INFO BANNER -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-sm gap-4">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="px-2.5 py-0.5 bg-sky-100 text-sky-800 text-xs font-semibold rounded-full border border-sky-200">Ensino Técnico Integral (9h)</span>
+                    <span class="text-xs text-slate-500 font-medium">Turma: 3ª Série C - Desenvol. de Sistemas</span>
+                </div>
+                <h1 class="text-xl font-bold text-slate-900 mt-1">Conselho de Classe e Replanejamento Contínuo</h1>
+            </div>
+            <div class="flex items-center gap-4 text-xs text-slate-600">
+                <div class="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                    <i data-lucide="users" class="w-4 h-4 text-slate-400"></i>
+                    <span>Docente Responsável: <strong>Prof. Wanderson Heredia</strong></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- EXECUTIVE SUMMARY KPIS -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <p class="text-xs font-medium text-slate-500 uppercase">Estudantes Ativos</p>
+                <h3 class="text-2xl font-bold text-slate-900 mt-1">38</h3>
+                <span class="text-xs text-emerald-600 font-medium">100% Retenção</span>
+            </div>
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <p class="text-xs font-medium text-slate-500 uppercase">Média Geral da Turma</p>
+                <h3 class="text-2xl font-bold text-slate-900 mt-1">6.8 <span class="text-xs font-normal text-slate-400">/ 10</span></h3>
+                <span class="text-xs text-emerald-600 font-medium">+0.4 vs 2º Bimestre</span>
+            </div>
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <p class="text-xs font-medium text-slate-500 uppercase">Alunos em Recomposição</p>
+                <h3 class="text-2xl font-bold text-red-600 mt-1">7 <span class="text-xs font-normal text-slate-500">(18.4%)</span></h3>
+                <span class="text-xs text-slate-500">Nota &lt; 5.0 em 2+ disc.</span>
+            </div>
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <p class="text-xs font-medium text-slate-500 uppercase">Intervenções Pedagógicas</p>
+                <h3 class="text-2xl font-bold text-slate-900 mt-1">6</h3>
+                <span class="text-xs text-amber-600 font-medium">4 Em Andamento</span>
+            </div>
+        </div>
+
+        <!-- TAB 1: VISÃO GERAL -->
+        <div id="tab-dashboard" class="tab-content space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div class="lg:col-span-7 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="font-bold text-slate-900 text-sm sm:text-base mb-4">Média por Componente Curricular</h3>
+                    <div class="h-64 sm:h-72">
+                        <canvas id="chartSubjectPerformance"></canvas>
+                    </div>
+                </div>
+                <div class="lg:col-span-5 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="font-bold text-slate-900 text-sm sm:text-base mb-4">Matriz: Absenteísmo x Rendimento</h3>
+                    <div class="h-64 sm:h-72">
+                        <canvas id="chartFaltasRendimento"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: RADAR DE COMPETÊNCIAS E HABILIDADES -->
+        <div id="tab-radar" class="tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Radar Chart 1: Turma vs Benchmark -->
+                <div class="lg:col-span-6 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="font-bold text-slate-900 text-base">Diagnóstico de Habilidades da Turma</h3>
+                            <p class="text-xs text-slate-500">Comparativo Média da Turma vs Meta Esperada (BNCC / Currículo Paulista)</p>
+                        </div>
+                    </div>
+                    <div class="h-80">
+                        <canvas id="chartRadarTurma"></canvas>
+                    </div>
+                </div>
+
+                <!-- Radar Chart 2: Comparativo de Alunos em Destaque vs Recomposição -->
+                <div class="lg:col-span-6 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="font-bold text-slate-900 text-base">Perfil de Alunos: Monitor vs Recomposição</h3>
+                            <p class="text-xs text-slate-500">Mapeamento para Formação de Duplas de Tutoria</p>
+                        </div>
+                    </div>
+                    <div class="h-80">
+                        <canvas id="chartRadarAlunos"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: CENTRAL DE INTERVENÇÃO -->
+        <div id="tab-interventions" class="tab-content hidden space-y-6">
+            <div class="bg-slate-900 text-white p-5 rounded-xl border border-slate-800">
+                <h3 class="font-bold text-base text-white">Agrupamento Produtivo Automático (Duplas de Tutoria)</h3>
+                <p class="text-xs text-slate-300 mt-1 mb-4">Avançados (Monitores) x Alunos em Recomposição</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                        <span class="text-xs text-sky-400 font-bold block mb-1">Dupla #1 - Lógica de Programação</span>
+                        <p class="text-xs text-emerald-400">👑 Monitor: Carlos Eduardo (Nota: 8.8)</p>
+                        <p class="text-xs text-red-400">🎯 Recomposição: Ana Clara Souza (Nota: 4.2)</p>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                        <span class="text-xs text-sky-400 font-bold block mb-1">Dupla #2 - Redes e SO</span>
+                        <p class="text-xs text-emerald-400">👑 Monitor: Fernanda Ribeiro (Nota: 9.5)</p>
+                        <p class="text-xs text-red-400">🎯 Recomposição: Bruno Henrique (Nota: 3.5)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: ETL -->
+        <div id="tab-etl" class="tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 text-center">
+                <h3 class="text-lg font-bold text-slate-900">Importação de Relatórios de Avaliação e Mapão</h3>
+                <p class="text-xs text-slate-500 mt-1">Suporta planilhas padrão da SED e Prova Paulista (.XLSX / .CSV)</p>
+                <div class="mt-6 border-2 border-dashed border-slate-300 bg-slate-50 rounded-xl p-8 cursor-pointer hover:border-brand-500">
+                    <i data-lucide="file-spreadsheet" class="w-10 h-10 text-brand-600 mx-auto mb-2"></i>
+                    <p class="text-sm font-semibold text-slate-700">Arraste a planilha do Mapão aqui</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- JAVASCRIPT: NAU / NAVEGAÇÃO / CHARTS -->
+    <script>
+        // Inicializa os ícones do Lucide
+        lucide.createIcons();
+
+        // Roteamento simples de Abas
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => {
+                el.classList.remove('border-brand-500', 'text-white', 'font-semibold');
+                el.classList.add('border-transparent');
+            });
+
+            document.getElementById(tabId).classList.remove('hidden');
+            const activeBtn = document.getElementById('btn-' + tabId);
+            if (activeBtn) {
+                activeBtn.classList.add('border-brand-500', 'text-white', 'font-semibold');
+                activeBtn.classList.remove('border-transparent');
+            }
+        }
+
+        // Gráficos ao carregar a página
+        window.addEventListener('DOMContentLoaded', () => {
+            // 1. Gráfico de Barras - Desempenho por Disciplina
+            new Chart(document.getElementById('chartSubjectPerformance'), {
+                type: 'bar',
+                data: {
+                    labels: ['Lógica e Prog.', 'Redes & SO', 'Metodologias Ágeis', 'Carreiras Tech'],
+                    datasets: [
+                        { label: 'Média da Turma (3º Bim)', data: [6.1, 6.5, 7.2, 7.8], backgroundColor: '#0284c7' },
+                        { label: 'Prova Paulista (Benchmark)', data: [5.8, 6.0, 7.0, 8.0], backgroundColor: '#94a3b8' }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // 2. Gráfico Scatter - Faltas x Rendimento
+            new Chart(document.getElementById('chartFaltasRendimento'), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Alunos',
+                        data: [
+                            { x: 2, y: 9.0 }, { x: 3, y: 8.5 }, { x: 5, y: 6.5 },
+                            { x: 8, y: 6.8 }, { x: 14, y: 4.2 }, { x: 16, y: 4.8 }, { x: 18, y: 4.5 }
+                        ],
+                        backgroundColor: '#ef4444'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Total de Faltas' } },
+                        y: { title: { display: true, text: 'Média de Notas' }, min: 0, max: 10 }
+                    }
+                }
+            });
+
+            // 3. Gráfico Radar 1 - Turma vs Meta de Competências
+            new Chart(document.getElementById('chartRadarTurma'), {
+                type: 'radar',
+                data: {
+                    labels: ['Raciocínio Lógico', 'Arquitetura de Redes', 'Trabalho em Equipe', 'Autonomia', 'Resolução de Problemas'],
+                    datasets: [
+                        {
+                            label: 'Média da Turma',
+                            data: [62, 68, 85, 70, 65],
+                            fill: true,
+                            backgroundColor: 'rgba(2, 132, 199, 0.2)',
+                            borderColor: '#0284c7',
+                            pointBackgroundColor: '#0284c7'
+                        },
+                        {
+                            label: 'Meta Esperada',
+                            data: [80, 80, 80, 80, 80],
+                            fill: true,
+                            backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                            borderColor: '#94a3b8',
+                            borderDash: [5, 5]
+                        }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { r: { min: 0, max: 100 } } }
+            });
+
+            // 4. Gráfico Radar 2 - Monitor vs Recomposição
+            new Chart(document.getElementById('chartRadarAlunos'), {
+                type: 'radar',
+                data: {
+                    labels: ['Lógica POO', 'Estruturas de Dados', 'Comandos Linux/Redes', 'Gestão de Projetos', 'Assiduidade'],
+                    datasets: [
+                        {
+                            label: 'Carlos (Monitor Sugerido)',
+                            data: [90, 85, 88, 75, 95],
+                            fill: true,
+                            backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                            borderColor: '#10b981'
+                        },
+                        {
+                            label: 'Ana Clara (Em Recomposição)',
+                            data: [40, 45, 50, 70, 60],
+                            fill: true,
+                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                            borderColor: '#ef4444'
+                        }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { r: { min: 0, max: 100 } } }
+            });
+        });
+    </script>
+</body>
 </html>
