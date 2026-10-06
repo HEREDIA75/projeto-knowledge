@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "meu-app-django-bc95f"
-  }
+  },
+  "targets": {
+    "meu-app-django-bc95f": {
+      "hosting": {
+        "knowledge-hub": [
+          "meu-app-django-bc95f"
+        ],
+        "replanejamento": [
+          "replanejamento-escolar"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

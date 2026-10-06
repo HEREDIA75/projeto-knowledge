@@ -1,28 +1,48 @@
 {
-  "hosting": {
-    "public": "public",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "cleanUrls": true,
-    "trailingSlash": false,
-    "rewrites": [
-      {
-        "source": "/jogos/**",
-        "destination": "/jogos/**"
-      },
-      {
-        "source": "/static/**",
-        "destination": "/static/**"
-      },
-      {
-        "source": "**",
-        "function": "app"
-      }
-    ]
-  },
+  "hosting": [
+    {
+      "target": "knowledge-hub",
+      "public": "public",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "cleanUrls": true,
+      "trailingSlash": false,
+      "rewrites": [
+        {
+          "source": "/jogos/**",
+          "destination": "/jogos/**"
+        },
+        {
+          "source": "/static/**",
+          "destination": "/static/**"
+        },
+        {
+          "source": "**",
+          "function": "app"
+        }
+      ]
+    },
+    {
+      "target": "replanejamento",
+      "public": "replanejamento-web/dist",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "cleanUrls": true,
+      "trailingSlash": false,
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    }
+  ],
   "emulators": {
     "hosting": {
       "host": "127.0.0.1",
