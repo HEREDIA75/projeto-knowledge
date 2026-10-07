@@ -231,8 +231,11 @@
 
     </main>
 
-    <!-- JAVASCRIPT: NAU / NAVEGAÇÃO / CHARTS -->
+<!-- JAVASCRIPT: NAVEGAÇÃO / CHARTS / INTEGRAÇÃO COM A API -->
     <script>
+        // Variáveis globais para armazenar as instâncias dos gráficos (evita erro de re-renderização do Chart.js)
+        let chartPerformance, chartFaltas, chartRadarTurma, chartRadarAlunos;
+
         // Inicializa os ícones do Lucide
         lucide.createIcons();
 
@@ -244,7 +247,9 @@
                 el.classList.add('border-transparent');
             });
 
-            document.getElementById(tabId).classList.remove('hidden');
+            const targetTab = document.getElementById(tabId);
+            if (targetTab) targetTab.classList.remove('hidden');
+
             const activeBtn = document.getElementById('btn-' + tabId);
             if (activeBtn) {
                 activeBtn.classList.add('border-brand-500', 'text-white', 'font-semibold');
@@ -252,95 +257,194 @@
             }
         }
 
-        // Gráficos ao carregar a página
+        // ======================================================
+        // INTEGRAÇÃO COM A API DJANGO NINJA (ENDPOINTS /api/escola)
+        // ======================================================
+
+        // 1. Carrega Indicadores e Duplas da Escola Selecionada
+        async function carregarDashboardEscola(escolaSlug) {
+            try {
+                const response = await fetch(`http://localhost:8000/api/escola/dashboard/${escolaSlug}`);
+                if (!response.ok) throw new Error("Falha ao comunicar com a API");
+                
+                const data = await response.json();
+
+                // Atualiza os KPIs no DOM se existirem os elementos
+                const elemTotal = document.getElementById('kpiTotalStudents');
+                const elemMedia = document.getElementById('kpiAverageGrade');
+                const elemRisco = document.getElementById('kpiRiskCount');
+
+                if (elemTotal) elemTotal.innerText = data.total_alunos;
+                if (elemMedia) elemMedia.innerText = data.media_geral;
+                if (elemRisco) elemRisco.innerText = data.alunos_recomposicao_count;
+
+                // Atualiza as duplas na aba de intervenção se houver container
+                renderizarDuplasTutoria(data.duplas_tutoria);
+            } catch (error) {
+                console.warn("API offline ou em desenvolvimento. Exibindo dados de fallback local.", error);
+            }
+        }
+
+        // 2. Renderiza os Cards de Duplas de Tutoria na Central de Intervenção
+        function renderizarDuplasTutoria(duplas) {
+            const container = document.getElementById('duplasTutoriaContainer');
+            if (!container || !duplas) return;
+
+            container.innerHTML = duplas.map((d, index) => `
+                <div class="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                    <span class="text-xs text-sky-400 font-bold block mb-1">Dupla #${index + 1} - ${d.disciplina}</span>
+                    <p class="text-xs text-emerald-400">👑 Monitor: ${d.monitor} (Nota: ${d.nota_monitor})</p>
+                    <p class="text-xs text-red-400">🎯 Recomposição: ${d.aluno_recomposicao} (Nota: ${d.nota_recomposicao})</p>
+                </div>
+            `).join('');
+        }
+
+        // 3. Envio de Arquivos (.XLSX) para a API via Upload ETL
+        async function enviarPlanilhaETL(fileInput, tipoEndpoint) {
+            const file = fileInput.files[0];
+            if (!file) {
+                alert("Por favor, selecione um arquivo .xlsx para importar.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const endpoint = tipoEndpoint === 'mapao' 
+                ? 'http://localhost:8000/api/escola/upload-mapao/'
+                : 'http://localhost:8000/api/escola/upload-disciplinas/';
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+                if (result.sucesso) {
+                    alert(`✅ ${result.mensagem}`);
+                    // Recarrega o dashboard
+                    const schoolSelect = document.getElementById('schoolSelect');
+                    if (schoolSelect) carregarDashboardEscola(schoolSelect.value);
+                } else {
+                    alert(`❌ Erro: ${result.message || 'Falha ao processar arquivo'}`);
+                }
+            } catch (error) {
+                alert("Erro ao conectar com o servidor para envio da planilha.");
+                console.error(error);
+            }
+        }
+
+        // ======================================================
+        // INICIALIZAÇÃO DOS GRÁFICOS (CHART.JS)
+        // ======================================================
         window.addEventListener('DOMContentLoaded', () => {
+            // Conecta o seletor de escola ao backend
+            const schoolSelect = document.getElementById('schoolSelect');
+            if (schoolSelect) {
+                carregarDashboardEscola(schoolSelect.value);
+                schoolSelect.addEventListener('change', (e) => carregarDashboardEscola(e.target.value));
+            }
+
             // 1. Gráfico de Barras - Desempenho por Disciplina
-            new Chart(document.getElementById('chartSubjectPerformance'), {
-                type: 'bar',
-                data: {
-                    labels: ['Lógica e Prog.', 'Redes & SO', 'Metodologias Ágeis', 'Carreiras Tech'],
-                    datasets: [
-                        { label: 'Média da Turma (3º Bim)', data: [6.1, 6.5, 7.2, 7.8], backgroundColor: '#0284c7' },
-                        { label: 'Prova Paulista (Benchmark)', data: [5.8, 6.0, 7.0, 8.0], backgroundColor: '#94a3b8' }
-                    ]
-                },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
+            const ctxPerf = document.getElementById('chartSubjectPerformance');
+            if (ctxPerf) {
+                chartPerformance = new Chart(ctxPerf, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Lógica e Prog.', 'Redes & SO', 'Metodologias Ágeis', 'Carreiras Tech'],
+                        datasets: [
+                            { label: 'Média da Turma (3º Bim)', data: [6.1, 6.5, 7.2, 7.8], backgroundColor: '#0284c7' },
+                            { label: 'Prova Paulista (Benchmark)', data: [5.8, 6.0, 7.0, 8.0], backgroundColor: '#94a3b8' }
+                        ]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
 
             // 2. Gráfico Scatter - Faltas x Rendimento
-            new Chart(document.getElementById('chartFaltasRendimento'), {
-                type: 'scatter',
-                data: {
-                    datasets: [{
-                        label: 'Alunos',
-                        data: [
-                            { x: 2, y: 9.0 }, { x: 3, y: 8.5 }, { x: 5, y: 6.5 },
-                            { x: 8, y: 6.8 }, { x: 14, y: 4.2 }, { x: 16, y: 4.8 }, { x: 18, y: 4.5 }
-                        ],
-                        backgroundColor: '#ef4444'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { title: { display: true, text: 'Total de Faltas' } },
-                        y: { title: { display: true, text: 'Média de Notas' }, min: 0, max: 10 }
+            const ctxFaltas = document.getElementById('chartFaltasRendimento');
+            if (ctxFaltas) {
+                chartFaltas = new Chart(ctxFaltas, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: 'Alunos',
+                            data: [
+                                { x: 2, y: 9.0 }, { x: 3, y: 8.5 }, { x: 5, y: 6.5 },
+                                { x: 8, y: 6.8 }, { x: 14, y: 4.2 }, { x: 16, y: 4.8 }, { x: 18, y: 4.5 }
+                            ],
+                            backgroundColor: '#ef4444'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: { title: { display: true, text: 'Total de Faltas' } },
+                            y: { title: { display: true, text: 'Média de Notas' }, min: 0, max: 10 }
+                        }
                     }
-                }
-            });
+                });
+            }
 
             // 3. Gráfico Radar 1 - Turma vs Meta de Competências
-            new Chart(document.getElementById('chartRadarTurma'), {
-                type: 'radar',
-                data: {
-                    labels: ['Raciocínio Lógico', 'Arquitetura de Redes', 'Trabalho em Equipe', 'Autonomia', 'Resolução de Problemas'],
-                    datasets: [
-                        {
-                            label: 'Média da Turma',
-                            data: [62, 68, 85, 70, 65],
-                            fill: true,
-                            backgroundColor: 'rgba(2, 132, 199, 0.2)',
-                            borderColor: '#0284c7',
-                            pointBackgroundColor: '#0284c7'
-                        },
-                        {
-                            label: 'Meta Esperada',
-                            data: [80, 80, 80, 80, 80],
-                            fill: true,
-                            backgroundColor: 'rgba(148, 163, 184, 0.1)',
-                            borderColor: '#94a3b8',
-                            borderDash: [5, 5]
-                        }
-                    ]
-                },
-                options: { responsive: true, maintainAspectRatio: false, scales: { r: { min: 0, max: 100 } } }
-            });
+            const ctxRadarTurma = document.getElementById('chartRadarTurma');
+            if (ctxRadarTurma) {
+                chartRadarTurma = new Chart(ctxRadarTurma, {
+                    type: 'radar',
+                    data: {
+                        labels: ['Raciocínio Lógico', 'Arquitetura de Redes', 'Trabalho em Equipe', 'Autonomia', 'Resolução de Problemas'],
+                        datasets: [
+                            {
+                                label: 'Média da Turma',
+                                data: [62, 68, 85, 70, 65],
+                                fill: true,
+                                backgroundColor: 'rgba(2, 132, 199, 0.2)',
+                                borderColor: '#0284c7',
+                                pointBackgroundColor: '#0284c7'
+                            },
+                            {
+                                label: 'Meta Esperada',
+                                data: [80, 80, 80, 80, 80],
+                                fill: true,
+                                backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                                borderColor: '#94a3b8',
+                                borderDash: [5, 5]
+                            }
+                        ]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { r: { min: 0, max: 100 } } }
+                });
+            }
 
             // 4. Gráfico Radar 2 - Monitor vs Recomposição
-            new Chart(document.getElementById('chartRadarAlunos'), {
-                type: 'radar',
-                data: {
-                    labels: ['Lógica POO', 'Estruturas de Dados', 'Comandos Linux/Redes', 'Gestão de Projetos', 'Assiduidade'],
-                    datasets: [
-                        {
-                            label: 'Carlos (Monitor Sugerido)',
-                            data: [90, 85, 88, 75, 95],
-                            fill: true,
-                            backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                            borderColor: '#10b981'
-                        },
-                        {
-                            label: 'Ana Clara (Em Recomposição)',
-                            data: [40, 45, 50, 70, 60],
-                            fill: true,
-                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                            borderColor: '#ef4444'
-                        }
-                    ]
-                },
-                options: { responsive: true, maintainAspectRatio: false, scales: { r: { min: 0, max: 100 } } }
-            });
+            const ctxRadarAlunos = document.getElementById('chartRadarAlunos');
+            if (ctxRadarAlunos) {
+                chartRadarAlunos = new Chart(ctxRadarAlunos, {
+                    type: 'radar',
+                    data: {
+                        labels: ['Lógica POO', 'Estruturas de Dados', 'Comandos Linux/Redes', 'Gestão de Projetos', 'Assiduidade'],
+                        datasets: [
+                            {
+                                label: 'Carlos (Monitor Sugerido)',
+                                data: [90, 85, 88, 75, 95],
+                                fill: true,
+                                backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                                borderColor: '#10b981'
+                            },
+                            {
+                                label: 'Ana Clara (Em Recomposição)',
+                                data: [40, 45, 50, 70, 60],
+                                fill: true,
+                                backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                                borderColor: '#ef4444'
+                            }
+                        ]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { r: { min: 0, max: 100 } } }
+                });
+            }
         });
     </script>
 </body>

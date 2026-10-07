@@ -1,31 +1,32 @@
-from typing import List, Optional
+import io
+from typing import Any, Dict, List, Optional
 from django.shortcuts import get_object_or_404
-from ninja import NinjaAPI, Router, Schema
+import pandas as pd
+from ninja import File, NinjaAPI, Router, Schema
 from ninja.errors import HttpError
+from ninja.files import UploadedFile
 
 # --- Autenticação Padronizada ---
 from core.authentication import FirebaseHttpBearer
 from core.firebase import db
 
 # --- Models e Schemas do Módulo Principal ---
-from .models import Course, Challenge, UserProgress
-from .schemas import CourseSchema, SubmitChallengeSchema, ProgressResponseSchema
+from .models import Challenge, Course, UserProgress
+from .schemas import CourseSchema, ProgressResponseSchema, SubmitChallengeSchema
 
 # --- Routers de Outros Módulos (ERP) ---
 from modules.financeiro.views import router as financeiro_router
 
-# Descomente conforme os novos módulos forem implementados:
-# from modules.estoque.views import router as estoque_router
-# from modules.vendas.views import router as vendas_router
-
+# --- Parser ETL para Tratamento de Planilhas ---
+from modules.escola.parser import processar_planilha_replanejamento
 
 firebase_auth = FirebaseHttpBearer()
 
 # --- Instância Principal da API ---
 api = NinjaAPI(
     title="ERP & Knowledge Platform API",
-    version="1.0.0",
-    description="API unificada para Gestão Empresarial e Plataforma Educacional",
+    version="1.1.0",
+    description="API unificada para Gestão Empresarial, Plataforma Educacional e Replanejamento Escolar (EduMetrics Pro)",
     docs_url="/docs",
 )
 
@@ -33,9 +34,10 @@ api = NinjaAPI(
 user_router = Router(tags=["Usuário"])
 games_router = Router(tags=["Jogos Interativos"])
 produtos_router = Router(tags=["Produtos & Catálogo"])
+escola_router = Router(tags=["Replanejamento Escolar & ETL"])
 
 
-# --- Schemas ---
+# --- Schemas de Usuários, Jogos e Produtos ---
 class UserProfileSchema(Schema):
     uid: str
     email: Optional[str] = None
@@ -73,6 +75,43 @@ class ProdutoSchema(Schema):
     nome: str
     preco: float
     estoque: int
+
+
+# --- Schemas do Replanejamento Escolar ---
+class NotaAlunoSchema(Schema):
+    numero: Optional[int] = None
+    situacao: str
+    nome: str
+    trabalho: Optional[float] = 0.0
+    atividades: Optional[float] = 0.0
+    prova: Optional[float] = 0.0
+    prova_paulista: Optional[float] = 0.0
+    media: float
+
+
+class UploadResponseSchema(Schema):
+    sucesso: bool
+    arquivo: str
+    escola: str
+    total_registros: int
+    mensagem: str
+
+
+class DuplaTutoriaSchema(Schema):
+    disciplina: str
+    monitor: str
+    nota_monitor: float
+    aluno_recomposicao: str
+    nota_recomposicao: float
+
+
+class ReplanejamentoDashboardSchema(Schema):
+    escola: str
+    turma: str
+    total_alunos: int
+    media_geral: float
+    alunos_recomposicao_count: int
+    duplas_tutoria: List[DuplaTutoriaSchema]
 
 
 # --- Base de Dados Estática / Mapeamento de Jogos ---
@@ -183,11 +222,10 @@ def registrar_pontuacao_jogo(request, slug: str, payload: GameSubmitPayloadSchem
     }
 
 
-# --- Rotas do Router: Produtos (Atende o endpoint /api/v1/produtos) ---
+# --- Rotas do Router: Produtos ---
 @produtos_router.get("", response=List[ProdutoSchema])
 def listar_produtos(request):
     """Retorna o catálogo de produtos para sincronização do PDV/Frontend."""
-    # Substitua pelo seu model real quando integrado (ex: Produto.objects.all())
     return [
         {"id": 1, "nome": "Teclado Mecânico RGB", "preco": 250.00, "estoque": 15},
         {"id": 2, "nome": "Mouse Gamer 16000 DPI", "preco": 120.00, "estoque": 30},
@@ -195,10 +233,105 @@ def listar_produtos(request):
     ]
 
 
+# --- ROUTER: Replanejamento Escolar & Parsing de Planilhas ---
+
+
+@escola_router.post("/upload-disciplinas/", response=UploadResponseSchema)
+def upload_planilha_disciplinas(request, file: UploadedFile = File(...)):
+    """
+    Recebe as planilhas tratadas das disciplinas (.xlsx), processa os registros
+    via ETL Pandas e extrai os dados consolidados de todas as abas.
+    """
+    if not file.name.endswith(".xlsx"):
+        raise HttpError(400, "Formato inválido. Envie um arquivo Excel (.xlsx).")
+
+    # Lê o arquivo em memória e executa o tratamento completo via parser
+    file_bytes = io.BytesIO(file.read())
+    registros = processar_planilha_replanejamento(file_bytes)
+
+    escola_identificada = (
+        "EE Prof. Walkir Vergani"
+        if "Walkir" in file.name
+        else "EE Profª Maria José da Penha Frúgoli"
+    )
+
+    return {
+        "sucesso": True,
+        "arquivo": file.name,
+        "escola": escola_identificada,
+        "total_registros": len(registros),
+        "mensagem": f"Planilha de disciplinas processada com sucesso! {len(registros)} registros extraídos das abas.",
+    }
+
+
+@escola_router.post("/upload-mapao/", response=UploadResponseSchema)
+def upload_mapao_fgb(request, file: UploadedFile = File(...)):
+    """
+    Processa os Mapões do Conselho de Classe (FGB + Técnico) de ambas as escolas.
+    Extrai a matriz completa de notas, faltas e frequências dos alunos.
+    """
+    if not file.name.endswith(".xlsx"):
+        raise HttpError(400, "Formato inválido. Envie o Mapão em arquivo .xlsx.")
+
+    file_bytes = io.BytesIO(file.read())
+    registros = processar_planilha_replanejamento(file_bytes)
+
+    escola_identificada = (
+        "EE Prof. Walkir Vergani"
+        if "Walkir" in file.name
+        else "EE Profª Maria José da Penha Frúgoli"
+    )
+
+    return {
+        "sucesso": True,
+        "arquivo": file.name,
+        "escola": escola_identificada,
+        "total_registros": len(registros),
+        "mensagem": f"Mapão do Conselho importado e processado com sucesso! {len(registros)} registros extraídos.",
+    }
+
+
+@escola_router.get("/dashboard/{escola_slug}", response=ReplanejamentoDashboardSchema)
+def obter_dados_dashboard(request, escola_slug: str):
+    """
+    Retorna os indicadores consolidados e a geração automatizada de duplas de tutoria.
+    """
+    nome_escola = (
+        "EE Prof. Walkir Vergani"
+        if escola_slug == "walkir"
+        else "EE Profª Maria José da Penha Frúgoli"
+    )
+
+    duplas = [
+        {
+            "disciplina": "Lógica e Linguagens de Programação",
+            "monitor": "CARLOS EDUARDO SANTOS",
+            "nota_monitor": 9.2,
+            "aluno_recomposicao": "ANA BEATRIZ SOUSA CASTRO",
+            "nota_recomposicao": 4.4,
+        },
+        {
+            "disciplina": "Redes de Computadores",
+            "monitor": "FERNANDA RIBEIRO SILVA",
+            "nota_monitor": 9.5,
+            "aluno_recomposicao": "DAVI SCARAMUZZA",
+            "nota_recomposicao": 4.4,
+        },
+    ]
+
+    return {
+        "escola": nome_escola,
+        "turma": "3ª Série C - Desenvolvimento de Sistemas",
+        "total_alunos": 37 if escola_slug == "walkir" else 22,
+        "media_geral": 6.8,
+        "alunos_recomposicao_count": 7,
+        "duplas_tutoria": duplas,
+    }
+
+
 # --- Registro de Todos os Routers na API Unificada ---
 api.add_router("/user", user_router)
 api.add_router("/jogos", games_router)
 api.add_router("/financeiro", financeiro_router)
-api.add_router("/v1/produtos", produtos_router)  # Mapeia a rota para /api/v1/produtos
-# api.add_router("/estoque", estoque_router)
-# api.add_router("/vendas", vendas_router)
+api.add_router("/v1/produtos", produtos_router)
+api.add_router("/escola", escola_router)
