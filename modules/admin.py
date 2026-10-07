@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import Course, Lesson, Challenge, UserProgress
+from .models import (
+    Challenge,
+    Course,
+    Lesson,
+    RegistroReplanejamento,
+    UserProgress,
+)
 
 
 class LessonInline(admin.TabularInline):
@@ -36,3 +42,16 @@ class ChallengeAdmin(admin.ModelAdmin):
 class UserProgressAdmin(admin.ModelAdmin):
     list_display = ("firebase_uid", "challenge", "completed", "completed_at")
     list_filter = ("completed",)
+
+
+@admin.register(RegistroReplanejamento)
+class RegistroReplanejamentoAdmin(admin.ModelAdmin):
+    list_display = (
+        "nome_aluno",
+        "disciplina",
+        "escola",
+        "media_final",
+        "situacao",
+    )
+    list_filter = ("escola", "tipo_documento", "disciplina")
+    search_fields = ("nome_aluno", "disciplina", "escola")

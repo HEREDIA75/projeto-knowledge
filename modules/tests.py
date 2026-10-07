@@ -1,8 +1,15 @@
 from django.test import TestCase
-from modules.models import Course, Lesson, Challenge, UserProgress
+from modules.models import (
+    Challenge,
+    Course,
+    Lesson,
+    RegistroReplanejamento,
+    UserProgress,
+)
 
 
 class ModuleModelsTestCase(TestCase):
+
     def setUp(self):
         self.course = Course.objects.create(
             title="Redes de Computadores",
@@ -40,3 +47,14 @@ class ModuleModelsTestCase(TestCase):
         )
         self.assertTrue(progress.completed)
         self.assertEqual(progress.challenge.points, 20)
+
+    def test_registro_replanejamento_creation(self):
+        registro = RegistroReplanejamento.objects.create(
+            escola="EE Prof. Walkir Vergani",
+            tipo_documento="DISCIPLINA_TECNICA",
+            disciplina="Lógica e Linguagens de Programação",
+            nome_aluno="CARLOS EDUARDO SANTOS",
+            media_final=9.2,
+        )
+        self.assertEqual(registro.escola, "EE Prof. Walkir Vergani")
+        self.assertEqual(registro.media_final, 9.2)

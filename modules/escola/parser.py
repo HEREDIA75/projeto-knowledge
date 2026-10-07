@@ -1,12 +1,10 @@
+import io
 from typing import Any, Dict, List
 import pandas as pd
 
 
 def converter_nota_para_float(valor: Any) -> float:
-    """
-    Converte com segurança valores de notas da planilha para float.
-    Trata strings como 'S/N', '-', '', None ou números com vírgula ('7,5').
-    """
+    """Converte valores com segurança para float, tratando 'S/N', '-', etc."""
     if pd.isna(valor) or valor is None:
         return 0.0
 
@@ -15,7 +13,6 @@ def converter_nota_para_float(valor: Any) -> float:
 
     val_str = str(valor).strip().replace(",", ".")
 
-    # Se contiver 'S/N', '-', ou texto não numérico
     if val_str.upper() in ["S/N", "SN", "-", "ND", "N/A", ""]:
         return 0.0
 
@@ -28,20 +25,15 @@ def converter_nota_para_float(valor: Any) -> float:
 def processar_planilha_replanejamento(
     file_path_or_bytes,
 ) -> List[Dict[str, Any]]:
-    """
-    Lê todas as abas das planilhas refatoradas (Disciplinas e Mapões)
-    e consolida os dados para o banco de dados/API.
-    """
+    """Processa planilhas de disciplinas e Mapões de conselho."""
     xls = pd.ExcelFile(file_path_or_bytes)
     registros_consolidados = []
 
     for sheet_name in xls.sheet_names:
         df = pd.read_excel(xls, sheet_name=sheet_name)
 
-        # 1. PROCESSAMENTO DE PLANILHAS DE DISCIPLINAS TÉCNICAS
+        # 1. Disciplinas Técnicas
         if "Nome" in df.columns and "Média" in df.columns:
-            df["Situação"] = df["Situação"].astype(str).str.strip()
-
             for _, row in df.iterrows():
                 nome = row.get("Nome")
                 if pd.isna(nome) or str(nome).strip() == "":
@@ -68,7 +60,7 @@ def processar_planilha_replanejamento(
                     }
                 )
 
-        # 2. PROCESSAMENTO DE MAPÕES GERAIS DO CONSELHO (FGB + TÉCNICO)
+        # 2. Mapão de Conselho
         elif "ALUNO" in df.columns:
             df_alunos = df.dropna(subset=["ALUNO"])
 

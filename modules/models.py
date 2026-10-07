@@ -75,3 +75,54 @@ class UserProgress(models.Model):
 
     def __str__(self):
         return f"Aluno {self.firebase_uid} - Desafio {self.challenge_id} (Concluído: {self.completed})"
+
+
+# --- NOVO MODEL: REPLANEJAMENTO ESCOLAR (EDUMETRICS PRO) ---
+class RegistroReplanejamento(models.Model):
+    """Guarda os dados importados via ETL de disciplinas técnicas e Mapões da SED"""
+
+    TIPO_CHOICES = [
+        ("DISCIPLINA_TECNICA", "Disciplina Técnica"),
+        ("MAPAO_CONSELHO", "Mapão do Conselho (FGB)"),
+    ]
+
+    escola = models.CharField(max_length=255, verbose_name="Nome da Escola")
+    tipo_documento = models.CharField(
+        max_length=50, choices=TIPO_CHOICES, default="DISCIPLINA_TECNICA"
+    )
+    bimestre = models.CharField(
+        max_length=50, default="3º Bimestre", verbose_name="Bimestre"
+    )
+    disciplina = models.CharField(max_length=150, verbose_name="Disciplina / Aba")
+
+    numero = models.IntegerField(
+        null=True, blank=True, verbose_name="Número da Chamada"
+    )
+    situacao = models.CharField(max_length=50, default="Ativo", verbose_name="Situação")
+    nome_aluno = models.CharField(
+        max_length=255, db_index=True, verbose_name="Nome do Estudante"
+    )
+
+    # Notas das avaliações
+    trabalho = models.FloatField(default=0.0, verbose_name="Nota Trabalho")
+    atividades = models.FloatField(default=0.0, verbose_name="Nota Atividades")
+    prova = models.FloatField(default=0.0, verbose_name="Nota Prova")
+    prova_paulista = models.FloatField(default=0.0, verbose_name="Nota Prova Paulista")
+    media_final = models.FloatField(
+        default=0.0, db_index=True, verbose_name="Média Final"
+    )
+
+    # Presença / Absenteísmo
+    faltas_totais = models.FloatField(default=0.0, verbose_name="Total Faltas")
+    frequencia_pct = models.CharField(
+        max_length=20, default="100%", verbose_name="Frequência (%)"
+    )
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Registro de Replanejamento"
+        verbose_name_plural = "Registros de Replanejamento"
+
+    def __str__(self):
+        return f"{self.nome_aluno} - {self.disciplina} ({self.escola}): Média {self.media_final}"

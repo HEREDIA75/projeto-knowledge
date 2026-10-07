@@ -3,8 +3,7 @@ from django.conf import settings
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.clickjacking import xframe_options_exempt
-from django.shortcuts import render
-from .models import Course, Lesson
+from .models import Course, Lesson, RegistroReplanejamento
 
 
 def dashboard_view(request):
@@ -45,10 +44,6 @@ def jogos_view(request):
 
 @xframe_options_exempt
 def neon_tetris_view(request):
-    """
-    Renderiza o jogo Neon Tetris permitindo exibição em <iframe>.
-    Se existir no diretório public/, serve o ficheiro; caso contrário, utiliza os templates do Django.
-    """
     game_path = os.path.join(
         settings.BASE_DIR, "public", "jogos", "neon-tetris", "index.html"
     )
@@ -62,3 +57,14 @@ def neon_tetris_view(request):
 
 def psicologia_view(request):
     return render(request, "jogos/psicologia/psicologo.html")
+
+
+# --- VIEWS DO REPLANEJAMENTO ESCOLAR ---
+def lista_alunos_view(request):
+    """Renderiza a lista completa de alunos cadastrados via ETL para consulta do Conselho."""
+    alunos = (
+        RegistroReplanejamento.objects.values("nome_aluno", "escola")
+        .distinct()
+        .order_by("nome_aluno")
+    )
+    return render(request, "escola/lista_alunos.html", {"alunos": alunos})

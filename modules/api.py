@@ -11,7 +11,7 @@ from core.authentication import FirebaseHttpBearer
 from core.firebase import db
 
 # --- Models e Schemas do Módulo Principal ---
-from .models import Challenge, Course, UserProgress
+from .models import Challenge, Course, UserProgress, RegistroReplanejamento
 from .schemas import CourseSchema, ProgressResponseSchema, SubmitChallengeSchema
 
 # --- Routers de Outros Módulos (ERP) ---
@@ -112,6 +112,24 @@ class ReplanejamentoDashboardSchema(Schema):
     media_geral: float
     alunos_recomposicao_count: int
     duplas_tutoria: List[DuplaTutoriaSchema]
+
+
+class BoletimItemSchema(Schema):
+    disciplina: str
+    trabalho: float
+    atividades: float
+    prova: float
+    prova_paulista: float
+    media_final: float
+
+
+class AlunoDetalheSchema(Schema):
+    nome: str
+    escola: str
+    media_geral: float
+    situacao_pedagogica: str
+    intervencao_sugerida: str
+    boletim: List[BoletimItemSchema]
 
 
 # --- Base de Dados Estática / Mapeamento de Jogos ---
@@ -239,13 +257,12 @@ def listar_produtos(request):
 @escola_router.post("/upload-disciplinas/", response=UploadResponseSchema)
 def upload_planilha_disciplinas(request, file: UploadedFile = File(...)):
     """
-    Recebe as planilhas tratadas das disciplinas (.xlsx), processa os registros
-    via ETL Pandas e extrai os dados consolidados de todas as abas.
+    Recebe as planilhas tratadas das disciplinas (.xlsx), processa via ETL Pandas
+    e GRAVA TODOS OS REGISTROS no banco de dados.
     """
     if not file.name.endswith(".xlsx"):
         raise HttpError(400, "Formato inválido. Envie um arquivo Excel (.xlsx).")
 
-    # Lê o arquivo em memória e executa o tratamento completo via parser
     file_bytes = io.BytesIO(file.read())
     registros = processar_planilha_replanejamento(file_bytes)
 
@@ -255,20 +272,39 @@ def upload_planilha_disciplinas(request, file: UploadedFile = File(...)):
         else "EE Profª Maria José da Penha Frúgoli"
     )
 
+    # GRAVAÇÃO REAL NO BANCO DE DADOS
+    objetos_para_salvar = [
+        RegistroReplanejamento(
+            escola=escola_identificada,
+            tipo_documento=item.get("tipo_documento", "DISCIPLINA_TECNICA"),
+            disciplina=item.get("aba_disciplina", "Geral"),
+            numero=item.get("numero"),
+            situacao=item.get("situacao", "Ativo"),
+            nome_aluno=item.get("nome_aluno"),
+            trabalho=item.get("trabalho", 0.0),
+            atividades=item.get("atividades", 0.0),
+            prova=item.get("prova", 0.0),
+            prova_paulista=item.get("prova_paulista", 0.0),
+            media_final=item.get("media_final", 0.0),
+        )
+        for item in registros
+    ]
+    RegistroReplanejamento.objects.bulk_create(objetos_para_salvar)
+
     return {
         "sucesso": True,
         "arquivo": file.name,
         "escola": escola_identificada,
-        "total_registros": len(registros),
-        "mensagem": f"Planilha de disciplinas processada com sucesso! {len(registros)} registros extraídos das abas.",
+        "total_registros": len(objetos_para_salvar),
+        "mensagem": f"Planilha de disciplinas processada com sucesso! {len(objetos_para_salvar)} registros gravados no banco de dados.",
     }
 
 
 @escola_router.post("/upload-mapao/", response=UploadResponseSchema)
 def upload_mapao_fgb(request, file: UploadedFile = File(...)):
     """
-    Processa os Mapões do Conselho de Classe (FGB + Técnico) de ambas as escolas.
-    Extrai a matriz completa de notas, faltas e frequências dos alunos.
+    Processa os Mapões do Conselho de Classe (FGB + Técnico)
+    e GRAVA OS REGISTROS NO BANCO DE DADOS.
     """
     if not file.name.endswith(".xlsx"):
         raise HttpError(400, "Formato inválido. Envie o Mapão em arquivo .xlsx.")
@@ -282,12 +318,28 @@ def upload_mapao_fgb(request, file: UploadedFile = File(...)):
         else "EE Profª Maria José da Penha Frúgoli"
     )
 
+    # GRAVAÇÃO REAL NO BANCO DE DADOS
+    objetos_para_salvar = [
+        RegistroReplanejamento(
+            escola=escola_identificada,
+            tipo_documento=item.get("tipo_documento", "MAPAO_CONSELHO"),
+            bimestre=item.get("bimestre", "3º Bimestre"),
+            disciplina="Mapão Geral (FGB)",
+            situacao=item.get("situacao", "Ativo"),
+            nome_aluno=item.get("nome_aluno"),
+            faltas_totais=item.get("faltas_totais", 0.0),
+            frequencia_pct=item.get("frequencia_pct", "100%"),
+        )
+        for item in registros
+    ]
+    RegistroReplanejamento.objects.bulk_create(objetos_para_salvar)
+
     return {
         "sucesso": True,
         "arquivo": file.name,
         "escola": escola_identificada,
-        "total_registros": len(registros),
-        "mensagem": f"Mapão do Conselho importado e processado com sucesso! {len(registros)} registros extraídos.",
+        "total_registros": len(objetos_para_salvar),
+        "mensagem": f"Mapão do Conselho importado e processado com sucesso! {len(objetos_para_salvar)} registros gravados no banco.",
     }
 
 
@@ -326,6 +378,68 @@ def obter_dados_dashboard(request, escola_slug: str):
         "media_geral": 6.8,
         "alunos_recomposicao_count": 7,
         "duplas_tutoria": duplas,
+    }
+
+
+@escola_router.get("/alunos/", response=List[Dict[str, str]])
+def listar_alunos(request, escola: Optional[str] = None):
+    """Retorna a lista de alunos únicos cadastrados no banco com a respectiva escola."""
+    query = RegistroReplanejamento.objects.all()
+    if escola:
+        query = query.filter(escola__icontains=escola)
+
+    alunos = query.values("nome_aluno", "escola").distinct().order_by("nome_aluno")
+    return [{"nome": a["nome_aluno"], "escola": a["escola"]} for a in alunos]
+
+
+@escola_router.get("/aluno/{nome_aluno}/desempenho", response=AlunoDetalheSchema)
+def obter_desempenho_aluno(request, nome_aluno: str):
+    """
+    Retorna o raio-x pedagógico do estudante: boletim completo, média geral,
+    diagnóstico de recomposição e tomada de decisão para o Conselho.
+    """
+    registros = RegistroReplanejamento.objects.filter(nome_aluno__iexact=nome_aluno)
+    if not registros.exists():
+        raise HttpError(404, "Aluno não encontrado no banco de dados.")
+
+    escola_nome = registros.first().escola
+    boletim = []
+    soma_medias = 0.0
+
+    for r in registros:
+        boletim.append(
+            {
+                "disciplina": r.disciplina,
+                "trabalho": r.trabalho,
+                "atividades": r.atividades,
+                "prova": r.prova,
+                "prova_paulista": r.prova_paulista,
+                "media_final": r.media_final,
+            }
+        )
+        soma_medias += r.media_final
+
+    media_geral = round(soma_medias / len(registros), 2) if registros else 0.0
+
+    if media_geral < 5.0:
+        situacao = "Em Recomposição Contínua"
+        intervencao = "Inclusão imediata em Dupla de Tutoria com aluno monitor e plano individual de recomposição."
+    elif media_geral >= 8.5:
+        situacao = "Excelência / Monitor Potencial"
+        intervencao = "Convocação para atuar como Monitor de Tutoria e projetos avançados de extensão."
+    else:
+        situacao = "Regular / Acompanhamento"
+        intervencao = (
+            "Manutenção do acompanhamento nas atividades regulares de sala de aula."
+        )
+
+    return {
+        "nome": nome_aluno,
+        "escola": escola_nome,
+        "media_geral": media_geral,
+        "situacao_pedagogica": situacao,
+        "intervencao_sugerida": intervencao,
+        "boletim": boletim,
     }
 
 
