@@ -186,6 +186,8 @@ CORS_ALLOWED_ORIGINS = [
     "https://promptdevgames.com.br",
     "https://meu-app-django-bc95f.web.app",
     "https://meu-app-django-bc95f.firebaseapp.com",
+    "https://replanejamento-escolar.web.app",
+    "https://replanejamento-escolar.web.app",
     "http://127.0.0.1:5005",
     "http://localhost:5005",
     "http://localhost:5173",
